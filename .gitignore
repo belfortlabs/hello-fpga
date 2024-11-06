@@ -1,0 +1,18 @@
+# Environment related
+.env/
+scripts/source_env.sh
+
+# TFHE-rs and Rust related
+Cargo.lock
+target/
+tfhe-rs/
+
+# Release related;
+#  
+#     mkdir release
+#     rsync -a --exclude='.git' --exclude-from='.gitignore' . release/
+#     tar -cvf release.tar.gz -C release .
+#     rm -rf release
+release/
+release.tar.gz
+release.zip

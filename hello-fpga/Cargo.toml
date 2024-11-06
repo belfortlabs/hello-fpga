@@ -1,0 +1,32 @@
+[package]
+name = "hello-fpga"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tfhe = { path = "../tfhe-rs/tfhe", features = [
+    "boolean",
+    "shortint",
+    "integer",
+    "x86_64-unix",
+] }
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+itertools = "0.11.0"
+proc-macro2 = "=1.0.79"
+chrono = "0.4"
+
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
+
+[[bin]]
+name = "weighted-sum-on-cpu"
+path = "src/weighted_sum_on_cpu.rs"
+
+[[bin]]
+name = "weighted-sum-on-fpga"
+path = "src/weighted_sum_on_fpga.rs"
+features = "fpga"
