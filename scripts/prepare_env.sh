@@ -16,29 +16,29 @@ pushd $TFHERS_DIR
 git checkout tags/$TFHERS_TAG -b $TFHERS_TAG
 git apply $REPO_DIR/belfort.patch
 
-# cat <<EOL > "$TFHERS_DIR/tfhe/src/core_crypto/fpga/accelerators/accelerators.rs"
-# pub const PARAM_MESSAGE_2_CARRY_2: ContainerParameters = ContainerParameters {
-#   fpga_image: "$REPO_DIR/accel.awsxclbin",
-#   batch_size: 12,
-#   streaming_size: 8,
-#   bsk_num_kernels: 1,
-#   ksk_num_kernels: 1,
-#   bsk_bits: 54,
-#   bsk_frac_bits: 46,
-#   ksk_bits: 34,
-# };
+cat <<EOL > "$TFHERS_DIR/tfhe/src/core_crypto/fpga/accelerators/accelerators.rs"
+pub const PARAM_MESSAGE_2_CARRY_2: ContainerParameters = ContainerParameters {
+  fpga_image: "$REPO_DIR/accel.awsxclbin",
+  batch_size: 12,
+  streaming_size: 8,
+  bsk_num_kernels: 1,
+  ksk_num_kernels: 1,
+  bsk_bits: 54,
+  bsk_frac_bits: 46,
+  ksk_bits: 34,
+};
 
-# pub const DEFAULT_PARAMETERS_KS_PBS: ContainerParameters = ContainerParameters {
-#   fpga_image: "/path/to/boolean.awsxclbin",
-#   batch_size: 1,
-#   streaming_size: 1,
-#   bsk_num_kernels: 1,
-#   ksk_num_kernels: 1,
-#   bsk_bits: 1,
-#   bsk_frac_bits: 1,
-#   ksk_bits: 1,
-# };
-# EOL
+pub const DEFAULT_PARAMETERS_KS_PBS: ContainerParameters = ContainerParameters {
+  fpga_image: "/path/to/boolean.awsxclbin",
+  batch_size: 1,
+  streaming_size: 1,
+  bsk_num_kernels: 1,
+  ksk_num_kernels: 1,
+  bsk_bits: 1,
+  bsk_frac_bits: 1,
+  ksk_bits: 1,
+};
+EOL
 
 git add .
 git checkout -b "Belfort-Release"
