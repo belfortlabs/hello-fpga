@@ -4,7 +4,7 @@
 
 ## What FPGA acceleration requires?
 
-You can fine a weighted-sum example in this repo, prepared for execution on both CPU and FPGA. You can use `diff` to see how minimal the changes are for utilizing FPGA acceleration.
+You can find a weighted-sum example in this repo for both CPU and FPGA execution. Use `diff` to see how minimal the changes are for FPGA acceleration.
 
 ```bash
 diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpga.rs
@@ -22,12 +22,6 @@ set_server_key(server_key);                         | set_server_key(fpga_key.cl
                                                     | fpga_key.connect(1);
 
 // Prepare your encrypted data                        // Prepare your encrypted data
-
-// Calculate on encrypted data                        // Calculate on encrypted data
-let encypted_weighted_sum =                           let encypted_weighted_sum =
-      encypted_value1 * encypted_weight1                     encypted_value1 * encypted_weight1
-    + encypted_value2 * encypted_weight2                   + encypted_value2 * encypted_weight2
-    + encypted_value3 * encypted_weight3;                  + encypted_value3 * encypted_weight3;
 ```
 
 ## How to run the demo?
@@ -48,29 +42,29 @@ Launch an AWS EC2 F1 instance.
 
 ### Prepare execution environment
 
-1. SSH into your instance with the credentials you set at launching it
+1. SSH into your instance with your credentials
 
-  ```bash
-  ssh -i <id.pem> ubuntu@<instance_public_dns>
-  ```
+```bash
+ssh -i <id.pem> ubuntu@<instance_public_dns>
+```
 
 2. Clone this repo into your AWS instance, or `scp` your existing clone to it
 
-  ```bash
-  scp -i <id.pem> -r . ubuntu@<instance_public_dns>:~/.
-  ```
+```bash
+scp -i <id.pem> -r . ubuntu@<instance_public_dns>:~/.
+```
 
-3. Run `prepare_env.sh` for setting up the execution environment; cloning `TFHE-rs`, patching it Belfort extensions, installing Rust, ...
+3. Run `prepare_env.sh` for setting up the execution environment; cloning `TFHE-rs`, patching it with the Belfort extensions, installing Rust, ...
 
-  ```bash
-  ./scripts/prepare_env.sh
-  ```
+```bash
+cd hello-fpga && ./scripts/prepare_env.sh
+```
 
 4. Source the created `source_env.sh` file for setting the environment vars for Rust development
 
-  ```bash
-  source ./scripts/source_env.sh
-  ```
+```bash
+source ./scripts/source_env.sh
+```
 
 5. You are ready to go
 
