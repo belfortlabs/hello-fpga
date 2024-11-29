@@ -78,6 +78,7 @@ export ENV_SETUP_SH="$REPO_DIR/scripts/source_env.sh"
 echo ""
 echo "export RUSTUP_HOME=$RUSTUP_HOME" >> $ENV_SETUP_SH
 echo "export CARGO_HOME=$CARGO_HOME" >> $ENV_SETUP_SH
+echo "export RUST_LOG=warn" >> $ENV_SETUP_SH
 echo ""
 echo "source $CARGO_HOME/env" >> $ENV_SETUP_SH
 echo ""

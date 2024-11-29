@@ -28,9 +28,13 @@ set_server_key(server_key);                         | set_server_key(fpga_key.cl
 
 ### Setup your AWS Account
 
-:exclamation: A new AWS account may not have the required quota allowance to launch a `f1.2xlarge` type instance. If that is your case, file a [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service. Make sure to combine your request with at least 8 CPU cores, as `f1.2xlarge` contains 8 vCPUs. The quota increase may take up to a few days to process.
+:exclamation: A new AWS account may not have the required quota allowance to launch a `f1.2xlarge` type instance. In this case, file a [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 8 CPU cores**, as `f1.2xlarge` contains 8 vCPUs. The quota increase may take up to a few days to process.
 
 In your communication to AWS, please pay attention that the F1 access permissions are tied to a given region. Though we provide the demo application in this repository, the actual FPGA image is hosted by AWS. We make that image publicly available in all the F1 instance regions of today, which are `us-east-1`, `us-west-2`, `eu-west-1`, `ap-southeast-2`, `eu-central-1` and `eu-west-2`. If more regions with F1 instances appear in future, we will make the image available in those regions too. If you notice that we are late to do this, you can create an issue.
+
+### Get access permissions
+
+For running the demo, you need access permissions to Belfort AMI and FPGA accelerator. We will grant you access, if you drop us a message over the [Belfort.eu](https://belfort.eu/contact/), create an issue here on GitHub, or [post/dm on X](https://x.com/belfort_eu). Be sure to include your AWS ID in your message.
 
 ### Launch an F1 instance
 
@@ -77,5 +81,12 @@ cargo run --release --package hello-fpga --bin weighted-sum-on-cpu
 ```
 
 ```bash
-cargo run --release --package hello-fpga --bin weighted-sum-on-fpga
+cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features fpga
 ```
+
+### Caveats
+
+- Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
+- Enabling the logger gives you runtime warnings if a software function is used. Contact us if you would like priority support for a function that emits a warning.
+- Current implementations use FFT, but NTT support is under development.
+- Development for a specialized running environment with optimized performance is ongoing.
