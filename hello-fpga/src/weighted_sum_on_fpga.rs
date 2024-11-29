@@ -1,11 +1,13 @@
 use rand::Rng;
 use std::time::Instant;
+use tfhe::integer::fpga::BelfortServerKey;
 use tfhe::prelude::*;
 use tfhe::set_server_key;
 use tfhe::{ClientKey, ConfigBuilder, FheUint64};
-use tfhe::integer::fpga::BelfortServerKey;
 
 fn main() {
+    // Initialize a logger for interfacing with runtime warnings
+    env_logger::init();
 
     // Test data
 
@@ -17,7 +19,7 @@ fn main() {
     let (value2, weight2) = generate_value_weight;
     let (value3, weight3) = generate_value_weight;
 
-    let weighted_sum= value1 * weight1 + value2 * weight2 + value3 * weight3;
+    let weighted_sum = value1 * weight1 + value2 * weight2 + value3 * weight3;
 
     // Create Keys
 
@@ -31,7 +33,12 @@ fn main() {
 
     // Encrypt Values
 
-    let encrypt_value_weight = |v, w| (FheUint64::encrypt(v, &client_key), FheUint64::encrypt(w, &client_key));
+    let encrypt_value_weight = |v, w| {
+        (
+            FheUint64::encrypt(v, &client_key),
+            FheUint64::encrypt(w, &client_key),
+        )
+    };
 
     let (encrypted_value1, encrypted_weight1) = encrypt_value_weight(value1, weight1);
     let (encrypted_value2, encrypted_weight2) = encrypt_value_weight(value2, weight2);
@@ -51,5 +58,4 @@ fn main() {
     assert_eq!(decrypted_weighted_sum, weighted_sum);
 
     fpga_key.disconnect();
-
 }
