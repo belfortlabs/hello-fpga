@@ -28,7 +28,7 @@ fn main() {
     let server_key = client_key.generate_server_key();
 
     let mut fpga_key = BelfortServerKey::from(&server_key);
-    fpga_key.connect(1);
+    fpga_key.connect();
     set_server_key(fpga_key.clone());
 
     // Encrypt Values
