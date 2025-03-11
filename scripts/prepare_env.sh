@@ -15,25 +15,6 @@ pushd $TFHERS_DIR
 git checkout tags/$TFHERS_TAG -b $TFHERS_TAG
 git apply $REPO_DIR/belfort.patch
 
-# git add .
-# git checkout -b "Belfort-Release"
-# git commit -m "Belfort Release"
-
-################################################################################
-# Install Rust
-
-# export RUST_SETUP_SH="$REPO_DIR/scripts/rust_setup.sh"
-
-# curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > $RUST_SETUP_SH
-
-# chmod +x $RUST_SETUP_SH
-# $RUST_SETUP_SH -y --no-modify-path
-# rm -f $RUST_SETUP_SH
-
-# source "$CARGO_HOME/env"
-
-# rustup toolchain install nightly-x86_64-unknown-linux-gnu
-# rustup default nightly
 
 make install_rs_check_toolchain
 make install_rs_build_toolchain
@@ -41,23 +22,5 @@ popd
 
 
 # Program FPGA
-/tools/belfort_v0.3/interface/fpga.py --program && source /tools/belfort_v0.3/interface/setup.sh
+/tools/belfort_v0.2-alpha/interface/fpga.py --program && source /tools/belfort_v0.2-alpha/interface/setup.sh
 
-################################################################################
-# Create setup file
-
-# export ENV_DIR="$REPO_DIR/.env"
-# export RUSTUP_HOME=$ENV_DIR/rust/rustup
-# export CARGO_HOME=$ENV_DIR/rust/cargo
-
-# export ENV_SETUP_SH="$REPO_DIR/scripts/source_env.sh"
-
-# echo ""
-# echo "export RUSTUP_HOME=$RUSTUP_HOME" >> $ENV_SETUP_SH
-# echo "export CARGO_HOME=$CARGO_HOME" >> $ENV_SETUP_SH
-# echo "export RUST_LOG=warn" >> $ENV_SETUP_SH
-# echo ""
-# echo "source $CARGO_HOME/env" >> $ENV_SETUP_SH
-# echo ""
-
-# chmod +x $ENV_SETUP_SH

@@ -13,15 +13,17 @@ diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpg
 **Change of only 3 lines of code:**
 
 ```Rust
-// Create keys                                        // Create keys
-let client_key = ClientKey::generate(config);         let client_key = ClientKey::generate(config);
-let server_key = client_key.generate_server_key();    let server_key = client_key.generate_server_key();
+/// Create Keys                                                  // Create Keys
 
-                                                    | let mut fpga_key = BelfortServerKey::from(&server_key);
-set_server_key(server_key);                         | set_server_key(fpga_key.clone());
-                                                    | fpga_key.connect(1);
+let config = ConfigBuilder::default().build();                  let config = ConfigBuilder::default().build();
+let client_key = ClientKey::generate(config);                   let client_key = ClientKey::generate(config);
+let server_key = client_key.generate_server_key();              let server_key = client_key.generate_server_key();
 
-// Prepare your encrypted data                        // Prepare your encrypted data
+                                                          |     let mut fpga_key = BelfortServerKey::from(&server_key);
+                                                          |     fpga_key.connect();
+set_server_key(server_key);                               |     set_server_key(fpga_key.clone());
+
+// Encrypt Values                                               // Encrypt Values
 ```
 
 ## How to run the demo?
