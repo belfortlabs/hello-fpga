@@ -21,6 +21,6 @@ make install_rs_build_toolchain
 popd
 
 
-# Program FPGA
-/tools/belfort_v0.2/interface/fpga.py --program && source /tools/belfort_v0.2/interface/setup.sh
+# Program FPGA through .bashrc alias
+fpga-setup
 
