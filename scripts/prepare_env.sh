@@ -22,5 +22,5 @@ popd
 
 
 # Program FPGA
-/tools/belfort_v0.2-alpha/interface/fpga.py --program && source /tools/belfort_v0.2-alpha/interface/setup.sh
+/tools/belfort_v0.2/interface/fpga.py --program && source /tools/belfort_v0.2/interface/setup.sh
 
