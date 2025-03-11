@@ -28,9 +28,9 @@ set_server_key(server_key);                         | set_server_key(fpga_key.cl
 
 ### Setup your AWS Account
 
-:exclamation: A new AWS account may not have the required quota allowance to launch a `f1.2xlarge` type instance. In this case, file a [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 8 vCPU cores**, as `f1.2xlarge` requires 8 vCPUs. The quota increase may take up to a few days to process.
+:exclamation: A new AWS account may not have the required quota allowance to launch a `f2` type instances. In this case, file a [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 24 vCPU cores**, as `f2.6xlarge` requires 24 vCPUs. The quota increase may take up to a few days to process.
 
-In your communication to AWS, please pay attention that the F1 access permissions are tied to a given region. Though we provide the demo application in this repository, the actual FPGA image is hosted by AWS. We make that image publicly available in all the F1 instance regions of today, which are `us-east-1`, `us-west-2`, `eu-west-1`, `ap-southeast-2`, `eu-central-1` and `eu-west-2`. If more regions with F1 instances appear in future, we will make the image available in those regions too. If you notice that we are late to do this, you can create an issue.
+In your communication to AWS, please pay attention that the F2 access permissions are tied to a given region. Though we provide the demo application in this repository, the actual FPGA image is hosted by AWS. We make that image publicly available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`. If more regions with F2 instances appear in future, we will make the image available in those regions too. If you notice that we are late to do this, you can create an issue.
 
 ### Get access permissions
 
@@ -38,11 +38,11 @@ For running the demo, you need access permissions to the Belfort AMI and FPGA ac
 
 ### Launch an F1 instance
 
-Launch an AWS EC2 F1 instance.
+Launch an AWS EC2 F2 instance.
 
-- Instance type: `f1.2xlarge`
+- Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
 - AMI: Belfort FPGA Acceleration AMI - `ami-06810d664ae1d2325`.
-  - This AMI is prepared by Belfort, free of charge, and ready-to-use, based on Ubuntu 20.04 LTS.
+  - This AMI is prepared by Belfort, free of charge, and ready-to-use, based on Ubuntu 24.04 LTS.
 
 ### Prepare execution environment
 
