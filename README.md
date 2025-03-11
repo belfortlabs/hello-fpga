@@ -60,19 +60,13 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 scp -i <id.pem> -r . ubuntu@<instance_public_dns>:~/.
 ```
 
-3. Run `prepare_env.sh` for setting up the execution environment; cloning `TFHE-rs`, patching it with the Belfort extensions, installing Rust, ...
+3. Source `prepare_env.sh` for setting up the execution environment; cloning `TFHE-rs`, patching it with the Belfort extensions, programming the FPGA images, ...
 
 ```bash
-cd hello-fpga && ./scripts/prepare_env.sh
+cd hello-fpga && source ./scripts/prepare_env.sh
 ```
 
-4. Source the created `source_env.sh` file for setting the environment vars for Rust development
-
-```bash
-source ./scripts/source_env.sh
-```
-
-5. You are ready to go
+4. You are ready to go
 
 ### Run the example applications
 

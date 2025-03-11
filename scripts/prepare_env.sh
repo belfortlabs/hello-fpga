@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
+export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")")"
 
 ################################################################################
 # Clone TFHE-rs and patch it with Belfort FPGA integration
