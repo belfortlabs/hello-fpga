@@ -43,7 +43,7 @@ For running the demo, you need access permissions to the Belfort AMI and FPGA ac
 Launch an AWS EC2 F2 instance.
 
 - Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
-- AMI: Belfort FPGA Acceleration AMI - `ami-06810d664ae1d2325`.
+- AMI: Belfort FPGA Acceleration AMI - `ami-012d786b8acdd9c72`.
   - This AMI is prepared by Belfort, free of charge, and ready-to-use, based on Ubuntu 24.04 LTS.
 
 ### Prepare execution environment
