@@ -53,7 +53,7 @@ scp -r -J <username>@ssh.esat.kuleuven.be ./ <username>@flipflop.esat.kuleuven.b
 3. Source `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
 
 ```bash
-cd hello-fpga && source ./scripts/prepare_env.sh
+cd hello-fpga && ./scripts/prepare_env.sh
 ```
 
 4. Set up the execution environment, which will make FPGAs discoverable to TFHE-rs

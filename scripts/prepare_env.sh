@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
+export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")")"
 
 ################################################################################
 # Clone TFHE-rs and patch it with Belfort FPGA integration
@@ -28,9 +28,6 @@ export RUSTUP_HOME=$ENV_DIR/rust/rustup
 export CARGO_HOME=$ENV_DIR/rust/cargo
 
 export RUST_SETUP_SH="$REPO_DIR/scripts/rust_setup.sh"
-
-echo $REPO_DIR
-echo $RUST_SETUP_SH
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > $RUST_SETUP_SH
 
