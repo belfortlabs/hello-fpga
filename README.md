@@ -41,7 +41,7 @@ ssh -J <username>@ssh.esat.kuleuven.be <username>@flipflop.esat.kuleuven.be
 *Clone* - You might need to set your ssh-keys for being able to clone:
 
 ```bash
-git clone --branch flipflop git@github.com:belfort-labs/hello-fpga.git
+git clone --branch flipflop git@github.com:belfortlabs/hello-fpga.git
 ```
 
 *SCP* - If you have a local clone, you can `scp` it to `flipflop`:
