@@ -1,6 +1,6 @@
 # BELFORT FPGA Acceleration
 
-:warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on AWS. While the full acceleration capabilities are limited by AWS FPGAs' restrictions, this early access version enables users to verify the Belfort FPGA integration.
+:warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on Belfort development server `flipflop`. This early access version enables users to verify the Belfort FPGA integration.
 
 ## What FPGA acceleration requires?
 
