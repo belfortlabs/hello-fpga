@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index 9babe2bc8..7a403ab49 100644
+index 9babe2bc..7a403ab4 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -1,6 +1,7 @@
@@ -20,10 +20,10 @@ index 9babe2bc8..7a403ab49 100644
 \ No newline at end of file
 diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
 new file mode 100644
-index 000000000..67c4cbe96
+index 00000000..8e845e36
 --- /dev/null
 +++ b/.gitlab-ci.yml
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,77 @@
 +before_script:
 +  - export RUSTUP_HOME=/tools/gitlab-runner/rust/rustup
 +  - export CARGO_HOME=/tools/gitlab-runner/rust/cargo
@@ -51,14 +51,14 @@ index 000000000..67c4cbe96
 +  - xball xbutil reset --force
 +
 +# Jobs
-+cargo_check:
++clippy_and_fmt:
 +  stage: test
 +  timeout: 1h
 +  rules:
 +    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
 +  script:
 +    - make install_rs_check_toolchain
-+    - cargo check
++    - cargo clippy
 +    - make check_fmt
 +
 +test_integer_fpga:
@@ -70,6 +70,7 @@ index 000000000..67c4cbe96
 +    - *reset_fpga
 +    - make install_rs_build_toolchain
 +    - make test_integer_fpga
++    - make test_arrays_fpga
 +
 +bench_integer_ops:
 +  stage: benchmark
@@ -101,7 +102,7 @@ index 000000000..67c4cbe96
 +      - target/criterion/fpga__throughput/*.png
 +    expire_in: 1 month
 diff --git a/Cargo.toml b/Cargo.toml
-index dd2856286..4f80cabc5 100644
+index dd285628..4f80cabc 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -4,19 +4,19 @@ members = [
@@ -139,7 +140,7 @@ index dd2856286..4f80cabc5 100644
  debug-assertions = false
 +overflow-checks = false
 diff --git a/Makefile b/Makefile
-index 4c85ac43c..af9b1bea8 100644
+index 4c85ac43..e1b0922f 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -558,6 +558,38 @@ test_core_crypto_cov: install_rs_build_toolchain install_rs_check_toolchain inst
@@ -169,7 +170,7 @@ index 4c85ac43c..af9b1bea8 100644
 +test_arrays_fpga: install_rs_build_toolchain
 +	RUSTFLAGS="$(RUSTFLAGS)" cargo $(CARGO_RS_BUILD_TOOLCHAIN) test --profile devo \
 +		--features=fpga -p $(TFHE_SPEC) \
-+		-- high_level_api::array::tests::unsigned_fpga  --nocapture \
++		-- high_level_api::array::fpga::tests \
 +		--test-threads=1 \
 +
 +.PHONY: test_arrays_fpga_emulate # Emulate all the tests for the high_level_api
@@ -250,7 +251,7 @@ index 4c85ac43c..af9b1bea8 100644
  .PHONY: print_doc_bench_parameters # Print parameters used in doc benchmarks
  print_doc_bench_parameters:
 diff --git a/README.md b/README.md
-index 88d4c1076..d4f491e88 100644
+index 88d4c107..d4f491e8 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,26 +1,15 @@
@@ -289,7 +290,7 @@ index 88d4c1076..d4f491e88 100644
  
 diff --git a/ZAMA_README.md b/ZAMA_README.md
 new file mode 100644
-index 000000000..4614ca3fe
+index 00000000..4614ca3f
 --- /dev/null
 +++ b/ZAMA_README.md
 @@ -0,0 +1,256 @@
@@ -551,7 +552,7 @@ index 000000000..4614ca3fe
 +</p>
 \ No newline at end of file
 diff --git a/backends/tfhe-cuda-backend/cuda/include/ciphertext.h b/backends/tfhe-cuda-backend/cuda/include/ciphertext.h
-index b3978834a..8101e4404 100644
+index b3978834..8101e440 100644
 --- a/backends/tfhe-cuda-backend/cuda/include/ciphertext.h
 +++ b/backends/tfhe-cuda-backend/cuda/include/ciphertext.h
 @@ -3,22 +3,23 @@
@@ -595,7 +596,7 @@ index b3978834a..8101e4404 100644
  }
  #endif
 diff --git a/backends/tfhe-cuda-backend/cuda/include/integer/compression/compression_utilities.h b/backends/tfhe-cuda-backend/cuda/include/integer/compression/compression_utilities.h
-index b3ab0acef..e5a358f46 100644
+index b3ab0ace..e5a358f4 100644
 --- a/backends/tfhe-cuda-backend/cuda/include/integer/compression/compression_utilities.h
 +++ b/backends/tfhe-cuda-backend/cuda/include/integer/compression/compression_utilities.h
 @@ -3,132 +3,143 @@
@@ -866,7 +867,7 @@ index b3ab0acef..e5a358f46 100644
  };
  #endif
 diff --git a/backends/tfhe-cuda-backend/cuda/src/crypto/ciphertext.cu b/backends/tfhe-cuda-backend/cuda/src/crypto/ciphertext.cu
-index 90d1ca35f..75a2da2c9 100644
+index 90d1ca35..75a2da2c 100644
 --- a/backends/tfhe-cuda-backend/cuda/src/crypto/ciphertext.cu
 +++ b/backends/tfhe-cuda-backend/cuda/src/crypto/ciphertext.cu
 @@ -5,73 +5,77 @@ void cuda_convert_lwe_ciphertext_vector_to_gpu_64(void *stream,
@@ -1004,7 +1005,7 @@ index 90d1ca35f..75a2da2c9 100644
 +        }
  }
 diff --git a/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cu b/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cu
-index ac570db93..60d4fbe75 100644
+index ac570db9..60d4fbe7 100644
 --- a/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cu
 +++ b/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cu
 @@ -7,19 +7,20 @@ void scratch_cuda_integer_compress_radix_ciphertext_64(
@@ -1143,7 +1144,7 @@ index ac570db93..60d4fbe75 100644
 +    mem_ptr->release((cudaStream_t *)(streams), gpu_indexes, gpu_count);
  }
 diff --git a/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cuh b/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cuh
-index 93fbf33bf..ca2f1750d 100644
+index 93fbf33b..ca2f1750 100644
 --- a/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cuh
 +++ b/backends/tfhe-cuda-backend/cuda/src/integer/compression/compression.cuh
 @@ -14,7 +14,8 @@
@@ -1361,7 +1362,7 @@ index 93fbf33bf..ca2f1750d 100644
    *mem_ptr = new int_decompression<Torus>(
        streams, gpu_indexes, gpu_count, encryption_params, compression_params,
 diff --git a/backends/tfhe-cuda-backend/cuda/src/pbs/bootstrapping_key.cuh b/backends/tfhe-cuda-backend/cuda/src/pbs/bootstrapping_key.cuh
-index 44df19c90..57986119d 100644
+index 44df19c9..57986119 100644
 --- a/backends/tfhe-cuda-backend/cuda/src/pbs/bootstrapping_key.cuh
 +++ b/backends/tfhe-cuda-backend/cuda/src/pbs/bootstrapping_key.cuh
 @@ -11,7 +11,8 @@
@@ -1602,7 +1603,7 @@ index 44df19c90..57986119d 100644
        batch_NSMFFT<FFTDegree<AmortizedDegree<16384>, ForwardFFT>, NOSM>
 diff --git a/format.sh b/format.sh
 new file mode 100755
-index 000000000..5de67e5db
+index 00000000..5de67e5d
 --- /dev/null
 +++ b/format.sh
 @@ -0,0 +1,21 @@
@@ -1630,7 +1631,7 @@ index 000000000..5de67e5db
 \ No newline at end of file
 diff --git a/params/boolean/.gitignore b/params/boolean/.gitignore
 new file mode 100644
-index 000000000..c96a04f00
+index 00000000..c96a04f0
 --- /dev/null
 +++ b/params/boolean/.gitignore
 @@ -0,0 +1,2 @@
@@ -1639,7 +1640,7 @@ index 000000000..c96a04f00
 \ No newline at end of file
 diff --git a/params/shortint/.gitignore b/params/shortint/.gitignore
 new file mode 100644
-index 000000000..c96a04f00
+index 00000000..c96a04f0
 --- /dev/null
 +++ b/params/shortint/.gitignore
 @@ -0,0 +1,2 @@
@@ -1648,7 +1649,7 @@ index 000000000..c96a04f00
 \ No newline at end of file
 diff --git a/scripts/copy_benchmarks.sh b/scripts/copy_benchmarks.sh
 new file mode 100755
-index 000000000..4159e5a31
+index 00000000..4159e5a3
 --- /dev/null
 +++ b/scripts/copy_benchmarks.sh
 @@ -0,0 +1,46 @@
@@ -1700,7 +1701,7 @@ index 000000000..4159e5a31
 +cp -R "$LATEST_PATH"/* $NEW_TFHE_DIR
 \ No newline at end of file
 diff --git a/tfhe/Cargo.toml b/tfhe/Cargo.toml
-index 2f050f638..bbf8bb470 100644
+index 2f050f63..2d55ee7f 100644
 --- a/tfhe/Cargo.toml
 +++ b/tfhe/Cargo.toml
 @@ -51,6 +51,7 @@ strum = { version = "0.26", features = ["derive"] }
@@ -1735,7 +1736,7 @@ index 2f050f638..bbf8bb470 100644
  bytemuck = { workspace = true }
  
  [features]
-+default = ["boolean", "integer", "fpga"]
++default = ["boolean", "integer"]
  boolean = []
  shortint = ["dep:sha3"]
  integer = ["shortint"]
@@ -1793,7 +1794,7 @@ index 2f050f638..bbf8bb470 100644
  [[example]]
 diff --git a/tfhe/benches/fpga/compare_benchmarks.py b/tfhe/benches/fpga/compare_benchmarks.py
 new file mode 100644
-index 000000000..56151b0a7
+index 00000000..56151b0a
 --- /dev/null
 +++ b/tfhe/benches/fpga/compare_benchmarks.py
 @@ -0,0 +1,68 @@
@@ -1867,7 +1868,7 @@ index 000000000..56151b0a7
 +    generate_report(BASE_BENCH_OUTPUT_PATH)
 diff --git a/tfhe/benches/fpga/erc20.rs b/tfhe/benches/fpga/erc20.rs
 new file mode 100644
-index 000000000..0f512eced
+index 00000000..0f512ece
 --- /dev/null
 +++ b/tfhe/benches/fpga/erc20.rs
 @@ -0,0 +1,118 @@
@@ -1991,7 +1992,7 @@ index 000000000..0f512eced
 +}
 diff --git a/tfhe/benches/fpga/helpers.py b/tfhe/benches/fpga/helpers.py
 new file mode 100644
-index 000000000..c84e9c557
+index 00000000..c84e9c55
 --- /dev/null
 +++ b/tfhe/benches/fpga/helpers.py
 @@ -0,0 +1,42 @@
@@ -2039,7 +2040,7 @@ index 000000000..c84e9c557
 +        return None
 diff --git a/tfhe/benches/fpga/integer.rs b/tfhe/benches/fpga/integer.rs
 new file mode 100644
-index 000000000..af6171e93
+index 00000000..af6171e9
 --- /dev/null
 +++ b/tfhe/benches/fpga/integer.rs
 @@ -0,0 +1,849 @@
@@ -2894,7 +2895,7 @@ index 000000000..af6171e93
 +}
 diff --git a/tfhe/benches/fpga/plot_throughput.py b/tfhe/benches/fpga/plot_throughput.py
 new file mode 100644
-index 000000000..a7206a31d
+index 00000000..a7206a31
 --- /dev/null
 +++ b/tfhe/benches/fpga/plot_throughput.py
 @@ -0,0 +1,194 @@
@@ -3094,7 +3095,7 @@ index 000000000..a7206a31d
 +    plot_data(filtered_info)
 diff --git a/tfhe/benches/fpga/report_integers.py b/tfhe/benches/fpga/report_integers.py
 new file mode 100644
-index 000000000..1a4eb0bee
+index 00000000..1a4eb0be
 --- /dev/null
 +++ b/tfhe/benches/fpga/report_integers.py
 @@ -0,0 +1,163 @@
@@ -3263,7 +3264,7 @@ index 000000000..1a4eb0bee
 +                md_file.write(markdown_table)
 diff --git a/tfhe/benches/fpga/throughput.rs b/tfhe/benches/fpga/throughput.rs
 new file mode 100644
-index 000000000..b4420c0f4
+index 00000000..103d2701
 --- /dev/null
 +++ b/tfhe/benches/fpga/throughput.rs
 @@ -0,0 +1,160 @@
@@ -3316,7 +3317,7 @@ index 000000000..b4420c0f4
 +            let mut ciphertexts: Vec<BooleanCiphertext> =
 +                (0..pack_size).map(|_| cks.encrypt(true)).collect();
 +
-+            let luts: Vec<LookupVector> = (0..pack_size).map(|_| LookupVector::boolean()).collect();
++            let luts: &[LookupVector] = (0..pack_size).map(|_| LookupVector::boolean()).collect();
 +
 +            bench_group.bench_function(&id, |b| {
 +                b.iter(|| black_box(fpga_utils.keyswitch_bootstrap_packed(&mut ciphertexts, &luts)))
@@ -3428,7 +3429,7 @@ index 000000000..b4420c0f4
 +    Criterion::default().configure_from_args().final_summary();
 +}
 diff --git a/tfhe/benches/integer/bench.rs b/tfhe/benches/integer/bench.rs
-index d6ead085b..621fa5afd 100644
+index d6ead085..621fa5af 100644
 --- a/tfhe/benches/integer/bench.rs
 +++ b/tfhe/benches/integer/bench.rs
 @@ -1056,26 +1056,7 @@ define_server_key_bench_scalar_default_fn!(
@@ -3533,17 +3534,16 @@ index d6ead085b..621fa5afd 100644
              default_scalar_parallelized_ops();
              default_scalar_parallelized_ops_comp();
 diff --git a/tfhe/build.rs b/tfhe/build.rs
-index ee078e570..0fbece5aa 100644
+index ee078e57..54f70615 100644
 --- a/tfhe/build.rs
 +++ b/tfhe/build.rs
-@@ -1,3 +1,6 @@
-+use std::env;
+@@ -1,3 +1,5 @@
 +extern crate bindgen;
 +
  #[cfg(all(feature = "__c_api", not(feature = "__force_skip_cbindgen")))]
  fn gen_c_api() {
      use std::env;
-@@ -79,5 +82,38 @@ fn gen_c_api() {
+@@ -79,5 +81,40 @@ fn gen_c_api() {
  
  fn main() {
      #[cfg(all(feature = "__c_api", not(feature = "__force_skip_cbindgen")))]
@@ -3552,6 +3552,8 @@ index ee078e570..0fbece5aa 100644
 +
 +    #[cfg(feature = "fpga")]
 +    {
++        use std::env;
++
 +        let belfort_home = env::var("BELFORT_HOME").ok();
 +        let xrt_home = env::var("XILINX_XRT").ok();
 +
@@ -3584,7 +3586,7 @@ index ee078e570..0fbece5aa 100644
 +    }
  }
 diff --git a/tfhe/c_api_tests/test_boolean_keygen.c b/tfhe/c_api_tests/test_boolean_keygen.c
-index 4fcb6f240..b5883444f 100644
+index 4fcb6f24..b5883444 100644
 --- a/tfhe/c_api_tests/test_boolean_keygen.c
 +++ b/tfhe/c_api_tests/test_boolean_keygen.c
 @@ -1,4 +1,4 @@
@@ -3594,7 +3596,7 @@ index 4fcb6f240..b5883444f 100644
  #include <inttypes.h>
  #include <stdio.h>
 diff --git a/tfhe/c_api_tests/test_boolean_server_key.c b/tfhe/c_api_tests/test_boolean_server_key.c
-index 3e2ec9373..6d271ff56 100644
+index 3e2ec937..6d271ff5 100644
 --- a/tfhe/c_api_tests/test_boolean_server_key.c
 +++ b/tfhe/c_api_tests/test_boolean_server_key.c
 @@ -1,4 +1,4 @@
@@ -3604,7 +3606,7 @@ index 3e2ec9373..6d271ff56 100644
  #include <inttypes.h>
  #include <stdio.h>
 diff --git a/tfhe/c_api_tests/test_high_level_zk.c b/tfhe/c_api_tests/test_high_level_zk.c
-index 093dfbf48..c620c5477 100644
+index 093dfbf4..c620c547 100644
 --- a/tfhe/c_api_tests/test_high_level_zk.c
 +++ b/tfhe/c_api_tests/test_high_level_zk.c
 @@ -1,4 +1,4 @@
@@ -3614,7 +3616,7 @@ index 093dfbf48..c620c5477 100644
  #include <stdlib.h>
  
 diff --git a/tfhe/c_api_tests/test_micro_bench_and.c b/tfhe/c_api_tests/test_micro_bench_and.c
-index 936474b5b..a0c5f31c7 100644
+index 936474b5..a0c5f31c 100644
 --- a/tfhe/c_api_tests/test_micro_bench_and.c
 +++ b/tfhe/c_api_tests/test_micro_bench_and.c
 @@ -1,4 +1,4 @@
@@ -3624,7 +3626,7 @@ index 936474b5b..a0c5f31c7 100644
  #include <inttypes.h>
  #include <stdio.h>
 diff --git a/tfhe/c_api_tests/test_shortint_keygen.c b/tfhe/c_api_tests/test_shortint_keygen.c
-index c603c802f..926b804a5 100644
+index c603c802..926b804a 100644
 --- a/tfhe/c_api_tests/test_shortint_keygen.c
 +++ b/tfhe/c_api_tests/test_shortint_keygen.c
 @@ -1,4 +1,4 @@
@@ -3634,7 +3636,7 @@ index c603c802f..926b804a5 100644
  #include <inttypes.h>
  #include <stdio.h>
 diff --git a/tfhe/c_api_tests/test_shortint_pbs.c b/tfhe/c_api_tests/test_shortint_pbs.c
-index c960aecf9..9e5aa1a98 100644
+index c960aecf..9e5aa1a9 100644
 --- a/tfhe/c_api_tests/test_shortint_pbs.c
 +++ b/tfhe/c_api_tests/test_shortint_pbs.c
 @@ -1,4 +1,4 @@
@@ -3644,7 +3646,7 @@ index c960aecf9..9e5aa1a98 100644
  #include <inttypes.h>
  #include <stdio.h>
 diff --git a/tfhe/c_api_tests/test_shortint_server_key.c b/tfhe/c_api_tests/test_shortint_server_key.c
-index 9622e9714..8e57e005d 100644
+index 9622e971..8e57e005 100644
 --- a/tfhe/c_api_tests/test_shortint_server_key.c
 +++ b/tfhe/c_api_tests/test_shortint_server_key.c
 @@ -1,4 +1,4 @@
@@ -3655,7 +3657,7 @@ index 9622e9714..8e57e005d 100644
  #include <stdio.h>
 diff --git a/tfhe/docs/guides/debug.md b/tfhe/docs/guides/debug.md
 new file mode 100644
-index 000000000..c6b942052
+index 00000000..c6b94205
 --- /dev/null
 +++ b/tfhe/docs/guides/debug.md
 @@ -0,0 +1,72 @@
@@ -3732,7 +3734,7 @@ index 000000000..c6b942052
 +Using trivial encryptions as input, the example runs in **980 ms** on a standard 12 cores laptop, using real encryptions
 +it would run in **7.5 seconds** on a 128-core machine.
 diff --git a/tfhe/examples/sha256.rs b/tfhe/examples/sha256.rs
-index dbc518275..21027473f 100644
+index dbc51827..21027473 100644
 --- a/tfhe/examples/sha256.rs
 +++ b/tfhe/examples/sha256.rs
 @@ -226,6 +226,10 @@ fn main() -> Result<(), std::io::Error> {
@@ -3747,7 +3749,7 @@ index dbc518275..21027473f 100644
      println!("key gen end");
  
 diff --git a/tfhe/js_on_wasm_tests/test-hlapi-unsigned.js b/tfhe/js_on_wasm_tests/test-hlapi-unsigned.js
-index f71da7014..337c474df 100644
+index f71da701..337c474d 100644
 --- a/tfhe/js_on_wasm_tests/test-hlapi-unsigned.js
 +++ b/tfhe/js_on_wasm_tests/test-hlapi-unsigned.js
 @@ -21,6 +21,7 @@ const {
@@ -3759,7 +3761,7 @@ index f71da7014..337c474df 100644
  const U256_MAX = BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935");
  const U128_MAX = BigInt("340282366920938463463374607431768211455");
 diff --git a/tfhe/src/boolean/engine/bootstrapping.rs b/tfhe/src/boolean/engine/bootstrapping.rs
-index 10b2316ed..8d86bdfdb 100644
+index 10b2316e..8d86bdfd 100644
 --- a/tfhe/src/boolean/engine/bootstrapping.rs
 +++ b/tfhe/src/boolean/engine/bootstrapping.rs
 @@ -323,7 +323,7 @@ impl CompressedServerKey {
@@ -3809,7 +3811,7 @@ index 10b2316ed..8d86bdfdb 100644
          mut ciphertext: LweCiphertextOwned<u32>,
 diff --git a/tfhe/src/boolean/engine/fpga.rs b/tfhe/src/boolean/engine/fpga.rs
 new file mode 100644
-index 000000000..6a544539f
+index 00000000..ba68622c
 --- /dev/null
 +++ b/tfhe/src/boolean/engine/fpga.rs
 @@ -0,0 +1,201 @@
@@ -3891,7 +3893,7 @@ index 000000000..6a544539f
 +                    let mut buffer_lwe_before_pbs =
 +                        LweCiphertext::new(0u32, lwe_size, ct_left_ct.ciphertext_modulus());
 +
-+                    lwe_ciphertext_add(&mut buffer_lwe_before_pbs, &ct_left_ct, &ct_right_ct);
++                    lwe_ciphertext_add(&mut buffer_lwe_before_pbs, ct_left_ct, ct_right_ct);
 +
 +                    match gate {
 +                        Gate::AND => {
@@ -3968,10 +3970,10 @@ index 000000000..6a544539f
 +                (Ciphertext::Trivial(message_left), Ciphertext::Trivial(message_right)) => {
 +                    let ct: Ciphertext = match gate {
 +                        Gate::AND => Ciphertext::Trivial(*message_left && *message_right),
-+                        Gate::OR => Ciphertext::Trivial(*message_left | *message_right),
++                        Gate::OR => Ciphertext::Trivial(*message_left || *message_right),
 +                        Gate::XOR => Ciphertext::Trivial(*message_left ^ *message_right),
 +                        Gate::NAND => Ciphertext::Trivial(!(*message_left && *message_right)),
-+                        Gate::NOR => Ciphertext::Trivial(!(*message_left | *message_right)),
++                        Gate::NOR => Ciphertext::Trivial(!*message_left || *message_right),
 +                        Gate::XNOR => Ciphertext::Trivial(!(*message_left ^ *message_right)),
 +                    };
 +
@@ -4011,11 +4013,11 @@ index 000000000..6a544539f
 +        self.fpga_utils
 +            .keyswitch_bootstrap_packed(&mut cts_pack, &luts);
 +
-+        return cts_pack;
++        cts_pack
 +    }
 +}
 diff --git a/tfhe/src/boolean/engine/mod.rs b/tfhe/src/boolean/engine/mod.rs
-index aa3696e37..d0534d7b3 100644
+index aa3696e3..d0534d7b 100644
 --- a/tfhe/src/boolean/engine/mod.rs
 +++ b/tfhe/src/boolean/engine/mod.rs
 @@ -18,6 +18,7 @@ use crate::core_crypto::seeders::new_seeder;
@@ -4045,7 +4047,7 @@ index aa3696e37..d0534d7b3 100644
      /// encryption.
      encryption_generator: EncryptionRandomGenerator<DefaultRandomGenerator>,
 diff --git a/tfhe/src/boolean/server_key/mod.rs b/tfhe/src/boolean/server_key/mod.rs
-index 493125a22..d9905fbf0 100644
+index 493125a2..b4407e9e 100644
 --- a/tfhe/src/boolean/server_key/mod.rs
 +++ b/tfhe/src/boolean/server_key/mod.rs
 @@ -15,6 +15,8 @@ use crate::boolean::engine::{
@@ -4064,11 +4066,11 @@ index 493125a22..d9905fbf0 100644
 +
 +impl From<ServerKey> for BelfortBooleanServerKey {
 +    fn from(value: ServerKey) -> Self {
-+        BelfortBooleanServerKey::default(value.clone())
++        Self::default(value)
 +    }
 +}
 diff --git a/tfhe/src/core_crypto/entities/polynomial.rs b/tfhe/src/core_crypto/entities/polynomial.rs
-index 05d64122c..e03da7061 100644
+index 05d64122..e03da706 100644
 --- a/tfhe/src/core_crypto/entities/polynomial.rs
 +++ b/tfhe/src/core_crypto/entities/polynomial.rs
 @@ -5,7 +5,7 @@ use tfhe_versionable::Versionize;
@@ -4103,10 +4105,10 @@ index 05d64122c..e03da7061 100644
  pub struct PolynomialCreationMetadata {}
 diff --git a/tfhe/src/core_crypto/fpga/keyswitch_bootstrap.rs b/tfhe/src/core_crypto/fpga/keyswitch_bootstrap.rs
 new file mode 100644
-index 000000000..8b57e8ffa
+index 00000000..491946c6
 --- /dev/null
 +++ b/tfhe/src/core_crypto/fpga/keyswitch_bootstrap.rs
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +use super::lookup_vector::LookupVector;
 +use super::{Accelerators, InterfaceStatusT, PbsTypeT};
 +use crate::boolean::ciphertext::Ciphertext as BooleanCiphertext;
@@ -4130,7 +4132,7 @@ index 000000000..8b57e8ffa
 +    fn keyswitch_bootstrap_packed(
 +        &self,
 +        ciphertexts: &mut Vec<Ciphertext>,
-+        lookup_vectors: &Vec<LookupVector>,
++        lookup_vectors: &[LookupVector],
 +    );
 +}
 +
@@ -4138,7 +4140,7 @@ index 000000000..8b57e8ffa
 +    fn keyswitch_bootstrap_packed(
 +        &self,
 +        _ciphertexts: &mut Vec<BooleanCiphertext>,
-+        _lookup_vectors: &Vec<LookupVector>,
++        _lookup_vectors: &[LookupVector],
 +    ) {
 +        panic!("FPGA acceleration is excluded on boolean!");
 +    }
@@ -4148,7 +4150,7 @@ index 000000000..8b57e8ffa
 +    fn keyswitch_bootstrap_packed(
 +        &self,
 +        ciphertexts: &mut Vec<ShortintCiphertext>,
-+        lookup_vectors: &Vec<LookupVector>,
++        lookup_vectors: &[LookupVector],
 +    ) {
 +        let ciphertext_ptrs: Vec<*mut u64> = ciphertexts
 +            .iter_mut()
@@ -4183,9 +4185,10 @@ index 000000000..8b57e8ffa
 +                fpga_indexes.len(),
 +            );
 +
-+            if status != InterfaceStatusT::InterfaceSuccess {
-+                panic!("Failed to execute on FPGA! Status {:?}", status);
-+            }
++            assert!(
++                status == InterfaceStatusT::InterfaceSuccess,
++                "Failed to execute on FPGA! Status {status:?}"
++            )
 +        }
 +
 +        for (ciphertext, lut) in ciphertexts.iter_mut().zip(lookup_vectors.iter()) {
@@ -4198,7 +4201,7 @@ index 000000000..8b57e8ffa
 +}
 diff --git a/tfhe/src/core_crypto/fpga/lookup_vector.rs b/tfhe/src/core_crypto/fpga/lookup_vector.rs
 new file mode 100644
-index 000000000..8129a8097
+index 00000000..83fcdab3
 --- /dev/null
 +++ b/tfhe/src/core_crypto/fpga/lookup_vector.rs
 @@ -0,0 +1,51 @@
@@ -4211,27 +4214,27 @@ index 000000000..8129a8097
 +}
 +
 +impl LookupVector {
-+    pub fn new(vector: Vec<u64>) -> LookupVector {
++    pub fn new(vector: &[u64]) -> Self {
 +        let max_value = vector.iter().max().unwrap();
-+        let compressed = LookupVector::compress(&vector);
++        let compressed = Self::compress(vector);
 +        let degree = Degree::new(*max_value);
 +
-+        LookupVector { compressed, degree }
++        Self { compressed, degree }
 +    }
 +
-+    pub fn new_with_max(vector: Vec<u64>, degree: u64) -> LookupVector {
-+        let compressed = LookupVector::compress(&vector);
++    pub fn new_with_max(vector: &[u64], degree: u64) -> Self {
++        let compressed = Self::compress(vector);
 +        let degree = Degree::new(degree);
 +
-+        LookupVector { compressed, degree }
++        Self { compressed, degree }
 +    }
 +
-+    fn compress(vector: &Vec<u64>) -> u64 {
++    fn compress(vector: &[u64]) -> u64 {
 +        let log2_modulus = vector.len().ilog2() as usize;
 +        vector
 +            .iter()
 +            .enumerate()
-+            .map(|(index, &value)| (value as u64) << (index * log2_modulus))
++            .map(|(index, &value)| value << (index * log2_modulus))
 +            .sum()
 +    }
 +
@@ -4246,8 +4249,8 @@ index 000000000..8129a8097
 +        vector
 +    }
 +
-+    pub fn boolean() -> LookupVector {
-+        LookupVector {
++    pub fn boolean() -> Self {
++        Self {
 +            compressed: 0,
 +            degree: Degree::new(0),
 +        }
@@ -4255,10 +4258,10 @@ index 000000000..8129a8097
 +}
 diff --git a/tfhe/src/core_crypto/fpga/mod.rs b/tfhe/src/core_crypto/fpga/mod.rs
 new file mode 100644
-index 000000000..216aa42aa
+index 00000000..cd0cbf81
 --- /dev/null
 +++ b/tfhe/src/core_crypto/fpga/mod.rs
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,51 @@
 +pub mod keyswitch_bootstrap;
 +pub mod lookup_vector;
 +pub mod utils;
@@ -4299,8 +4302,10 @@ index 000000000..216aa42aa
 +    pub fpga_indexes: Vec<usize>,
 +}
 +
-+impl BelfortFpgaUtils {
-+    pub fn default() -> Self {
++unsafe impl Send for BelfortFpgaUtils {}
++
++impl std::default::Default for BelfortFpgaUtils {
++    fn default() -> Self {
 +        Self {
 +            accelerators: ptr::null_mut(),
 +            is_connected: false,
@@ -4310,10 +4315,10 @@ index 000000000..216aa42aa
 +}
 diff --git a/tfhe/src/core_crypto/fpga/utils.rs b/tfhe/src/core_crypto/fpga/utils.rs
 new file mode 100644
-index 000000000..992ef1b33
+index 00000000..16ea5793
 --- /dev/null
 +++ b/tfhe/src/core_crypto/fpga/utils.rs
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,172 @@
 +use super::InterfaceStatusT;
 +use crate::boolean::server_key::ServerKey as BooleanServerKey;
 +use crate::core_crypto::fpga::{Accelerators, BelfortFpgaUtils};
@@ -4353,12 +4358,13 @@ index 000000000..992ef1b33
 +            return;
 +        }
 +
-+        if cpu_key.pbs_order == PBSOrder::BootstrapKeyswitch {
-+            panic!("Packed BootstrapKeyswitch is not supported")
-+        }
++        assert!(
++            !(cpu_key.pbs_order == PBSOrder::BootstrapKeyswitch),
++            "Packed BootstrapKeyswitch is not supported"
++        );
 +
-+        let bootstrapping_key = cpu_key.bootstrapping_key.clone();
-+        let key_switching_key = cpu_key.key_switching_key.clone();
++        let bootstrapping_key = &cpu_key.bootstrapping_key;
++        let key_switching_key = &cpu_key.key_switching_key;
 +
 +        let bsk = match bootstrapping_key {
 +            ShortintBootstrappingKey::Classic(flbko) => flbko,
@@ -4377,9 +4383,10 @@ index 000000000..992ef1b33
 +            return;
 +        }
 +
-+        if cpu_key.pbs_order == PBSOrder::BootstrapKeyswitch {
-+            panic!("Packed BootstrapKeyswitch is not supported")
-+        }
++        assert!(
++            !(cpu_key.pbs_order == PBSOrder::BootstrapKeyswitch),
++            "Packed BootstrapKeyswitch is not supported"
++        );
 +
 +        let bootstrapping_key = &cpu_key.bootstrapping_key;
 +        let bsk = match bootstrapping_key {
@@ -4398,8 +4405,8 @@ index 000000000..992ef1b33
 +impl BelfortFpgaUtils {
 +    fn connect_to_all_fpgas(
 +        &mut self,
-+        bsk: FourierLweBootstrapKeyOwned,
-+        ksk: LweKeyswitchKey<Vec<u64>>,
++        bsk: &FourierLweBootstrapKeyOwned,
++        ksk: &LweKeyswitchKey<Vec<u64>>,
 +    ) {
 +        let ksk_vector: Vec<u64> = ksk.clone().into_container();
 +        let bsk_vector: Vec<c64> = bsk.clone().data().to_vec();
@@ -4411,21 +4418,23 @@ index 000000000..992ef1b33
 +            let mut fpga_vec_ptr: *mut usize = std::ptr::null_mut();
 +
 +            self.accelerators = connect(&mut fpga_vec_ptr, &mut fpga_count);
-+            if self.accelerators.is_null() {
-+                panic!("Failed to connect accelerator");
-+            }
 +
-+            if tx_ksk_to_fpga(self.accelerators, ksk_vector.as_ptr())
-+                != InterfaceStatusT::InterfaceSuccess
-+            {
-+                panic!("Failed to send ksk to accelerator");
-+            }
++            assert!(
++                !self.accelerators.is_null(),
++                "Failed to connect accelerator"
++            );
 +
-+            if tx_bsk_to_fpga(self.accelerators, bsk_vector.as_ptr())
-+                != InterfaceStatusT::InterfaceSuccess
-+            {
-+                panic!("Failed to send bsk to accelerator");
-+            }
++            assert!(
++                tx_ksk_to_fpga(self.accelerators, ksk_vector.as_ptr())
++                    == InterfaceStatusT::InterfaceSuccess,
++                "Failed to send ksk to accelerator"
++            );
++
++            assert!(
++                tx_bsk_to_fpga(self.accelerators, bsk_vector.as_ptr())
++                    == InterfaceStatusT::InterfaceSuccess,
++                "Failed to send bsk to accelerator"
++            );
 +
 +            fpga_indexes = Vec::from_raw_parts(fpga_vec_ptr, fpga_count, fpga_count);
 +        }
@@ -4447,21 +4456,22 @@ index 000000000..992ef1b33
 +
 +        unsafe {
 +            self.accelerators = connect_to(fpga_indexes.as_ptr(), fpga_count);
-+            if self.accelerators.is_null() {
-+                panic!("Failed to connect accelerator");
-+            }
++            assert!(
++                !self.accelerators.is_null(),
++                "Failed to connect accelerator"
++            );
 +
-+            if tx_ksk_to_fpga(self.accelerators, ksk_vector.as_ptr())
-+                != InterfaceStatusT::InterfaceSuccess
-+            {
-+                panic!("Failed to send ksk to accelerator");
-+            }
++            assert!(
++                tx_ksk_to_fpga(self.accelerators, ksk_vector.as_ptr())
++                    == InterfaceStatusT::InterfaceSuccess,
++                "Failed to send ksk to accelerator"
++            );
 +
-+            if tx_bsk_to_fpga(self.accelerators, bsk_vector.as_ptr())
-+                != InterfaceStatusT::InterfaceSuccess
-+            {
-+                panic!("Failed to send bsk to accelerator");
-+            }
++            assert!(
++                tx_bsk_to_fpga(self.accelerators, bsk_vector.as_ptr())
++                    == InterfaceStatusT::InterfaceSuccess,
++                "Failed to send bsk to accelerator"
++            );
 +        }
 +
 +        self.fpga_indexes = fpga_indexes;
@@ -4471,9 +4481,10 @@ index 000000000..992ef1b33
 +    pub fn disconnect(&mut self) {
 +        if self.is_connected {
 +            unsafe {
-+                if disconnect(self.accelerators) != InterfaceStatusT::InterfaceSuccess {
-+                    panic!("Failed to disconnect accelerator");
-+                }
++                assert!(
++                    !(disconnect(self.accelerators) != InterfaceStatusT::InterfaceSuccess),
++                    "Failed to disconnect accelerator"
++                );
 +
 +                self.is_connected = false;
 +            }
@@ -4481,7 +4492,7 @@ index 000000000..992ef1b33
 +    }
 +}
 diff --git a/tfhe/src/core_crypto/mod.rs b/tfhe/src/core_crypto/mod.rs
-index a15ef7c01..e4d69e007 100644
+index a15ef7c0..e4d69e00 100644
 --- a/tfhe/src/core_crypto/mod.rs
 +++ b/tfhe/src/core_crypto/mod.rs
 @@ -20,6 +20,8 @@ pub mod fft_impl;
@@ -4495,7 +4506,7 @@ index a15ef7c01..e4d69e007 100644
  
 diff --git a/tfhe/src/core_crypto/probe_time.rs b/tfhe/src/core_crypto/probe_time.rs
 new file mode 100644
-index 000000000..071be62f7
+index 00000000..071be62f
 --- /dev/null
 +++ b/tfhe/src/core_crypto/probe_time.rs
 @@ -0,0 +1,37 @@
@@ -4537,27 +4548,25 @@ index 000000000..071be62f7
 +    };
 +}
 diff --git a/tfhe/src/high_level_api/array/cpu/integers.rs b/tfhe/src/high_level_api/array/cpu/integers.rs
-index dc9a639b9..d53ed71a7 100644
+index dc9a639b..aabbf813 100644
 --- a/tfhe/src/high_level_api/array/cpu/integers.rs
 +++ b/tfhe/src/high_level_api/array/cpu/integers.rs
-@@ -2,6 +2,7 @@
+@@ -2,10 +2,14 @@
  //! where the values and computations are always done on CPU
  use super::super::helpers::{create_sub_mut_slice_with_bound, create_sub_slice_with_bound};
  use super::super::traits::{ArithmeticArrayBackend, BitwiseArrayBackend, ClearBitwiseArrayBackend};
++#[cfg(feature = "fpga")]
 +use crate::array::fpga::integers::par_map_fpga_op_on_pair_of_elements;
  use crate::core_crypto::prelude::{SignedNumeric, UnsignedNumeric};
  use crate::high_level_api::array::{
      ArrayBackend, FheArrayBase, FheBackendArray, FheBackendArraySlice, FheBackendArraySliceMut,
-@@ -18,7 +19,7 @@ use crate::integer::server_key::radix_parallel::scalar_div_mod::SignedReciprocab
- use crate::integer::server_key::{Reciprocable, ScalarMultiplier};
- use crate::integer::{IntegerRadixCiphertext, RadixCiphertext, SignedRadixCiphertext};
- use crate::prelude::{FheDecrypt, FheTryEncrypt};
--use crate::{ClientKey, Error};
-+use crate::{BelfortServerKey, ClientKey, Error};
- use rayon::prelude::*;
- use std::marker::PhantomData;
- use std::ops::RangeBounds;
-@@ -72,14 +73,18 @@ where
+ };
++#[cfg(feature = "fpga")]
++use crate::BelfortServerKey;
+ 
+ use crate::array::traits::{
+     BackendDataContainer, BackendDataContainerMut, ClearArithmeticArrayBackend, TensorSlice,
+@@ -72,14 +76,18 @@ where
      })
  }
  
@@ -4577,7 +4586,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::add_parallelized)
      }
  
-@@ -87,6 +92,9 @@ where
+@@ -87,6 +95,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4587,7 +4596,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::sub_parallelized)
      }
  
-@@ -94,6 +102,9 @@ where
+@@ -94,6 +105,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4597,7 +4606,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::mul_parallelized)
      }
  
-@@ -101,6 +112,9 @@ where
+@@ -101,6 +115,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4607,7 +4616,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::div_parallelized)
      }
  
-@@ -108,6 +122,9 @@ where
+@@ -108,6 +125,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4617,7 +4626,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::rem_parallelized)
      }
  }
-@@ -260,14 +277,18 @@ where
+@@ -260,14 +280,18 @@ where
      }
  }
  
@@ -4637,7 +4646,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::bitand_parallelized)
      }
  
-@@ -275,6 +296,9 @@ where
+@@ -275,6 +299,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4647,7 +4656,7 @@ index dc9a639b9..d53ed71a7 100644
          par_map_sks_op_on_pair_of_elements(lhs, rhs, crate::integer::ServerKey::bitor_parallelized)
      }
  
-@@ -282,6 +306,9 @@ where
+@@ -282,6 +309,9 @@ where
          lhs: TensorSlice<'_, Self::Slice<'a>>,
          rhs: TensorSlice<'_, Self::Slice<'a>>,
      ) -> Self::Owned {
@@ -4658,7 +4667,7 @@ index dc9a639b9..d53ed71a7 100644
      }
  
 diff --git a/tfhe/src/high_level_api/array/dynamic/booleans.rs b/tfhe/src/high_level_api/array/dynamic/booleans.rs
-index ff8354105..69e99f321 100644
+index ff835410..69e99f32 100644
 --- a/tfhe/src/high_level_api/array/dynamic/booleans.rs
 +++ b/tfhe/src/high_level_api/array/dynamic/booleans.rs
 @@ -113,6 +113,10 @@ where
@@ -4695,7 +4704,7 @@ index ff8354105..69e99f321 100644
              panic!("{}", crate::high_level_api::errors::UninitializedServerKey);
          }
 diff --git a/tfhe/src/high_level_api/array/dynamic/signed.rs b/tfhe/src/high_level_api/array/dynamic/signed.rs
-index 77763b491..b71808364 100644
+index 77763b49..b7180836 100644
 --- a/tfhe/src/high_level_api/array/dynamic/signed.rs
 +++ b/tfhe/src/high_level_api/array/dynamic/signed.rs
 @@ -196,6 +196,10 @@ where
@@ -4732,19 +4741,31 @@ index 77763b491..b71808364 100644
              panic!("{}", crate::high_level_api::errors::UninitializedServerKey);
          }
 diff --git a/tfhe/src/high_level_api/array/dynamic/unsigned.rs b/tfhe/src/high_level_api/array/dynamic/unsigned.rs
-index 149e03706..f757a57e7 100644
+index 149e0370..bdaecec0 100644
 --- a/tfhe/src/high_level_api/array/dynamic/unsigned.rs
 +++ b/tfhe/src/high_level_api/array/dynamic/unsigned.rs
-@@ -185,7 +185,7 @@ where
-     ) -> Vec<RadixCiphertext>,
- {
-     match global_state::device_of_internal_keys() {
--        Some(Device::Cpu) => {
-+        Some(Device::Cpu) | Some(Device::Fpga) => {
-             let lhs_cpu_cow = lhs.slice.on_cpu();
-             let rhs_cpu_cow = rhs.slice.on_cpu();
- 
-@@ -229,6 +229,10 @@ where
+@@ -198,6 +198,20 @@ where
+             );
+             InnerUintArray::Cpu(result)
+         }
++        #[cfg(feature = "fpga")]
++        Some(Device::Fpga) => {
++            let lhs_cpu_cow = lhs.slice.on_cpu();
++            let rhs_cpu_cow = rhs.slice.on_cpu();
++
++            let lhs_cpu_slice: &[RadixCiphertext] = lhs_cpu_cow.borrow();
++            let rhs_cpu_slice: &[RadixCiphertext] = rhs_cpu_cow.borrow();
++
++            let result = cpu_fn(
++                TensorSlice::new(lhs_cpu_slice, lhs.dims),
++                TensorSlice::new(rhs_cpu_slice, rhs.dims),
++            );
++            InnerUintArray::Cpu(result)
++        }
+         #[cfg(feature = "gpu")]
+         Some(Device::CudaGpu) => {
+             panic!("Not supported by Cuda devices")
+@@ -229,6 +243,10 @@ where
          Some(Device::CudaGpu) => {
              panic!("Not supported by Cuda devices")
          }
@@ -4755,7 +4776,7 @@ index 149e03706..f757a57e7 100644
          None => {
              panic!("{}", crate::high_level_api::errors::UninitializedServerKey);
          }
-@@ -353,6 +357,10 @@ where
+@@ -353,6 +371,10 @@ where
          Some(Device::CudaGpu) => {
              panic!("Not supported by Cuda devices")
          }
@@ -4768,10 +4789,10 @@ index 149e03706..f757a57e7 100644
          }
 diff --git a/tfhe/src/high_level_api/array/fpga/integers.rs b/tfhe/src/high_level_api/array/fpga/integers.rs
 new file mode 100644
-index 000000000..1dd7d9b0a
+index 00000000..e6e7f180
 --- /dev/null
 +++ b/tfhe/src/high_level_api/array/fpga/integers.rs
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,99 @@
 +use crate::array::traits::TensorSlice;
 +use crate::high_level_api::global_state;
 +use crate::integer::IntegerRadixCiphertext;
@@ -4839,7 +4860,7 @@ index 000000000..1dd7d9b0a
 +        drop(tx_res);
 +        drop(threads);
 +
-+        results.into_iter().filter_map(|x| x).collect()
++        results.into_iter().flatten().collect()
 +    })
 +}
 +
@@ -4857,14 +4878,13 @@ index 000000000..1dd7d9b0a
 +        .map(|i| {
 +            let (tx, rx) = channel::<OperationPackage<T, F>>();
 +            let res_sender = result_sender.clone();
-+            let thread_key = fpga_key.clone();
++            let mut thread_key = fpga_key.clone();
 +
 +            thread::spawn(move || {
-+                let mut thread_key_clone = thread_key.clone();
-+                thread_key_clone.fpga_utils.fpga_indexes = vec![i];
++                thread_key.fpga_utils.fpga_indexes = vec![i];
 +
 +                while let Ok(p) = rx.recv() {
-+                    let result = (p.operation)(&thread_key_clone, &p.left, &p.right);
++                    let result = (p.operation)(&thread_key, &p.left, &p.right);
 +                    let _ = res_sender.send((p.idx, result));
 +                }
 +            });
@@ -4874,67 +4894,25 @@ index 000000000..1dd7d9b0a
 +}
 diff --git a/tfhe/src/high_level_api/array/fpga/mod.rs b/tfhe/src/high_level_api/array/fpga/mod.rs
 new file mode 100644
-index 000000000..e3f81ab5c
+index 00000000..bd196331
 --- /dev/null
 +++ b/tfhe/src/high_level_api/array/fpga/mod.rs
-@@ -0,0 +1 @@
+@@ -0,0 +1,4 @@
 +pub(crate) mod integers;
-diff --git a/tfhe/src/high_level_api/array/mod.rs b/tfhe/src/high_level_api/array/mod.rs
-index 9c5e1936a..8dca1f1fa 100644
---- a/tfhe/src/high_level_api/array/mod.rs
-+++ b/tfhe/src/high_level_api/array/mod.rs
-@@ -1,6 +1,8 @@
- mod clear_ops;
- mod cpu;
- mod dynamic;
-+#[cfg(feature = "fpga")]
-+mod fpga;
- #[cfg(feature = "gpu")]
- mod gpu;
- mod helpers;
-@@ -364,6 +366,8 @@ pub fn fhe_uint_array_eq<Id: FheUintId>(lhs: &[FheUint<Id>], rhs: &[FheUint<Id>]
-                 .all_eq_slices_parallelized(&tmp_lhs, &tmp_rhs);
-             FheBool::new(result, cpu_key.tag.clone())
-         }
-+        #[cfg(feature = "fpga")]
-+        InternalServerKey::Belfort(_fpga_key) => panic!("Not implemented!"),
-         #[cfg(feature = "gpu")]
-         InternalServerKey::Cuda(gpu_key) => with_thread_local_cuda_streams(|streams| {
-             let tmp_lhs = lhs
-@@ -401,6 +405,8 @@ pub fn fhe_uint_array_contains_sub_slice<Id: FheUintId>(
-                 .contains_sub_slice_parallelized(&tmp_lhs, &tmp_pattern);
-             FheBool::new(result, cpu_key.tag.clone())
-         }
-+        #[cfg(feature = "fpga")]
-+        InternalServerKey::Belfort(_fpga_key) => panic!("Not implemented!"),
-         #[cfg(feature = "gpu")]
-         InternalServerKey::Cuda(gpu_key) => with_thread_local_cuda_streams(|streams| {
-             let tmp_lhs = lhs
-diff --git a/tfhe/src/high_level_api/array/tests/mod.rs b/tfhe/src/high_level_api/array/tests/mod.rs
-index bc0d6ca56..93bf21922 100644
---- a/tfhe/src/high_level_api/array/tests/mod.rs
-+++ b/tfhe/src/high_level_api/array/tests/mod.rs
-@@ -1,6 +1,8 @@
- mod booleans;
- mod signed;
- mod unsigned;
-+#[cfg(feature = "fpga")]
-+mod unsigned_fpga;
- 
- use crate::{generate_keys, set_server_key, ClientKey, ConfigBuilder, FheId};
- #[cfg(feature = "gpu")]
-@@ -13,6 +15,7 @@ use crate::array::traits::IOwnedArray;
- use crate::array::ClearArray;
- use crate::high_level_api::array::{FheBackendArray, FheBackendArraySlice};
- use crate::prelude::{FheDecrypt, FheTryEncrypt};
-+use crate::BelfortServerKey;
- use std::ops::{BitAnd, BitOr, BitXor};
- 
- #[cfg(feature = "gpu")]
-@@ -38,6 +41,18 @@ fn setup_default_cpu() -> ClientKey {
-     ck
- }
- 
++
++#[cfg(test)]
++mod tests;
+diff --git a/tfhe/src/high_level_api/array/fpga/tests/mod.rs b/tfhe/src/high_level_api/array/fpga/tests/mod.rs
+new file mode 100644
+index 00000000..225691b2
+--- /dev/null
++++ b/tfhe/src/high_level_api/array/fpga/tests/mod.rs
+@@ -0,0 +1,16 @@
++use crate::{generate_keys, set_server_key, BelfortServerKey, ClientKey, ConfigBuilder};
++
++#[cfg(test)]
++mod test_arrays;
++
 +fn setup_default_fpga() -> (ClientKey, BelfortServerKey) {
 +    let config = ConfigBuilder::default().build();
 +    let (ck, sk) = generate_keys(config);
@@ -4946,19 +4924,16 @@ index bc0d6ca56..93bf21922 100644
 +
 +    (ck, fpga_key)
 +}
-+
- #[cfg(feature = "gpu")]
- fn setup_default_gpu() -> ClientKey {
-     let config = ConfigBuilder::default().build();
-diff --git a/tfhe/src/high_level_api/array/tests/unsigned_fpga.rs b/tfhe/src/high_level_api/array/tests/unsigned_fpga.rs
+diff --git a/tfhe/src/high_level_api/array/fpga/tests/test_arrays.rs b/tfhe/src/high_level_api/array/fpga/tests/test_arrays.rs
 new file mode 100644
-index 000000000..c0d5715e8
+index 00000000..8572fad7
 --- /dev/null
-+++ b/tfhe/src/high_level_api/array/tests/unsigned_fpga.rs
-@@ -0,0 +1,71 @@
++++ b/tfhe/src/high_level_api/array/fpga/tests/test_arrays.rs
+@@ -0,0 +1,72 @@
 +use super::setup_default_fpga;
 +use crate::array::cpu::integers::CpuUintArrayBackend;
 +use crate::array::dynamic::DynUintBackend;
++use crate::array::tests::{bitand_test_case, bitor_test_case};
 +use crate::prelude::*;
 +use crate::{CpuFheUint32Array, FheUint32Array, FheUint32Id};
 +use rand::prelude::*;
@@ -4969,7 +4944,7 @@ index 000000000..c0d5715e8
 +        #[test]
 +        fn $test_name() {
 +            let (ck, mut fpga_key) = setup_default_fpga();
-+            super::$test_case::<$($type_param),+>(&ck);
++            $test_case::<$($type_param),+>(&ck);
 +            fpga_key.disconnect();
 +        }
 +    };
@@ -5027,8 +5002,79 @@ index 000000000..c0d5715e8
 +    }
 +    fpga_key.disconnect();
 +}
+diff --git a/tfhe/src/high_level_api/array/mod.rs b/tfhe/src/high_level_api/array/mod.rs
+index 9c5e1936..8dca1f1f 100644
+--- a/tfhe/src/high_level_api/array/mod.rs
++++ b/tfhe/src/high_level_api/array/mod.rs
+@@ -1,6 +1,8 @@
+ mod clear_ops;
+ mod cpu;
+ mod dynamic;
++#[cfg(feature = "fpga")]
++mod fpga;
+ #[cfg(feature = "gpu")]
+ mod gpu;
+ mod helpers;
+@@ -364,6 +366,8 @@ pub fn fhe_uint_array_eq<Id: FheUintId>(lhs: &[FheUint<Id>], rhs: &[FheUint<Id>]
+                 .all_eq_slices_parallelized(&tmp_lhs, &tmp_rhs);
+             FheBool::new(result, cpu_key.tag.clone())
+         }
++        #[cfg(feature = "fpga")]
++        InternalServerKey::Belfort(_fpga_key) => panic!("Not implemented!"),
+         #[cfg(feature = "gpu")]
+         InternalServerKey::Cuda(gpu_key) => with_thread_local_cuda_streams(|streams| {
+             let tmp_lhs = lhs
+@@ -401,6 +405,8 @@ pub fn fhe_uint_array_contains_sub_slice<Id: FheUintId>(
+                 .contains_sub_slice_parallelized(&tmp_lhs, &tmp_pattern);
+             FheBool::new(result, cpu_key.tag.clone())
+         }
++        #[cfg(feature = "fpga")]
++        InternalServerKey::Belfort(_fpga_key) => panic!("Not implemented!"),
+         #[cfg(feature = "gpu")]
+         InternalServerKey::Cuda(gpu_key) => with_thread_local_cuda_streams(|streams| {
+             let tmp_lhs = lhs
+diff --git a/tfhe/src/high_level_api/array/tests/mod.rs b/tfhe/src/high_level_api/array/tests/mod.rs
+index bc0d6ca5..f0976635 100644
+--- a/tfhe/src/high_level_api/array/tests/mod.rs
++++ b/tfhe/src/high_level_api/array/tests/mod.rs
+@@ -47,7 +47,7 @@ fn setup_default_gpu() -> ClientKey {
+     ck
+ }
+ 
+-fn bitand_test_case<Id, Backend, Clear>(ck: &ClientKey)
++pub(crate) fn bitand_test_case<Id, Backend, Clear>(ck: &ClientKey)
+ where
+     Id: FheId,
+     Backend: crate::high_level_api::array::ArrayBackend,
+@@ -118,7 +118,7 @@ where
+     }
+ }
+ 
+-fn bitor_test_case<Array, Clear>(ck: &ClientKey)
++pub(crate) fn bitor_test_case<Array, Clear>(ck: &ClientKey)
+ where
+     Standard: Distribution<Clear>,
+     Clear: BitOr<Clear, Output = Clear> + Copy + Eq + Debug,
+@@ -184,7 +184,7 @@ where
+     }
+ }
+ 
+-fn bitxor_test_case<Array, Clear>(ck: &ClientKey)
++pub(crate) fn bitxor_test_case<Array, Clear>(ck: &ClientKey)
+ where
+     Standard: Distribution<Clear>,
+     Clear: Copy + BitXor<Clear, Output = Clear> + Eq + Debug,
+@@ -250,7 +250,7 @@ where
+     }
+ }
+ 
+-fn bitand_scalar_slice_test_case<Array, Clear>(ck: &ClientKey)
++pub(crate) fn bitand_scalar_slice_test_case<Array, Clear>(ck: &ClientKey)
+ where
+     Standard: Distribution<Clear>,
+     Clear: Copy + BitAnd<Clear, Output = Clear> + Eq + Debug,
 diff --git a/tfhe/src/high_level_api/booleans/base.rs b/tfhe/src/high_level_api/booleans/base.rs
-index 63f6e5cd4..241af139d 100644
+index 63f6e5cd..241af139 100644
 --- a/tfhe/src/high_level_api/booleans/base.rs
 +++ b/tfhe/src/high_level_api/booleans/base.rs
 @@ -201,6 +201,15 @@ where
@@ -5370,7 +5416,7 @@ index 63f6e5cd4..241af139d 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner = cuda_key
 diff --git a/tfhe/src/high_level_api/booleans/encrypt.rs b/tfhe/src/high_level_api/booleans/encrypt.rs
-index c339a2b8d..f603fd5a0 100644
+index c339a2b8..f603fd5a 100644
 --- a/tfhe/src/high_level_api/booleans/encrypt.rs
 +++ b/tfhe/src/high_level_api/booleans/encrypt.rs
 @@ -89,6 +89,11 @@ impl FheTryTrivialEncrypt<bool> for FheBool {
@@ -5386,7 +5432,7 @@ index c339a2b8d..f603fd5a0 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner: CudaUnsignedRadixCiphertext =
 diff --git a/tfhe/src/high_level_api/booleans/inner.rs b/tfhe/src/high_level_api/booleans/inner.rs
-index 669675eda..c8c80f88d 100644
+index 669675ed..c8c80f88 100644
 --- a/tfhe/src/high_level_api/booleans/inner.rs
 +++ b/tfhe/src/high_level_api/booleans/inner.rs
 @@ -188,6 +188,10 @@ impl InnerBoolean {
@@ -5401,7 +5447,7 @@ index 669675eda..c8c80f88d 100644
              (Self::Cuda(_), Device::CudaGpu) => {
                  // Nothing to do, we already are on the correct device
 diff --git a/tfhe/src/high_level_api/booleans/oprf.rs b/tfhe/src/high_level_api/booleans/oprf.rs
-index 4546cfda8..1dc314d7e 100644
+index 4546cfda..1dc314d7 100644
 --- a/tfhe/src/high_level_api/booleans/oprf.rs
 +++ b/tfhe/src/high_level_api/booleans/oprf.rs
 @@ -30,6 +30,15 @@ impl FheBool {
@@ -5421,7 +5467,7 @@ index 4546cfda8..1dc314d7e 100644
              InternalServerKey::Cuda(_) => {
                  todo!("Cuda devices do not yet support oblivious pseudo random generation")
 diff --git a/tfhe/src/high_level_api/booleans/tests.rs b/tfhe/src/high_level_api/booleans/tests.rs
-index e6127628b..762bfff86 100644
+index e6127628..762bfff8 100644
 --- a/tfhe/src/high_level_api/booleans/tests.rs
 +++ b/tfhe/src/high_level_api/booleans/tests.rs
 @@ -727,7 +727,7 @@ mod gpu {
@@ -5434,19 +5480,19 @@ index e6127628b..762bfff86 100644
  
          let server_keys = csks.decompress_to_gpu();
 diff --git a/tfhe/src/high_level_api/compact_list.rs b/tfhe/src/high_level_api/compact_list.rs
-index 836865de8..adbec6908 100644
+index 836865de..36d8666c 100644
 --- a/tfhe/src/high_level_api/compact_list.rs
 +++ b/tfhe/src/high_level_api/compact_list.rs
-@@ -7,7 +7,7 @@ use crate::conformance::ParameterSetConformant;
- use crate::core_crypto::commons::math::random::{Deserialize, Serialize};
+@@ -8,6 +8,8 @@ use crate::core_crypto::commons::math::random::{Deserialize, Serialize};
  use crate::core_crypto::prelude::Numeric;
  use crate::high_level_api::global_state;
--use crate::high_level_api::keys::InternalServerKey;
-+use crate::high_level_api::keys::{InternalServerKey, ServerKey};
+ use crate::high_level_api::keys::InternalServerKey;
++#[cfg(feature = "fpga")]
++use crate::high_level_api::keys::ServerKey;
  use crate::high_level_api::traits::Tagged;
  use crate::integer::ciphertext::{Compactable, DataKind, Expandable};
  use crate::integer::encryption::KnowsMessageModulus;
-@@ -141,6 +141,14 @@ impl CompactCiphertextList {
+@@ -141,6 +143,14 @@ impl CompactCiphertextList {
                      inner,
                      tag: self.tag.clone(),
                  }),
@@ -5462,7 +5508,7 @@ index 836865de8..adbec6908 100644
              Some(_) => Err(crate::Error::new("Expected a CPU server key".to_string())),
          })
 diff --git a/tfhe/src/high_level_api/compressed_ciphertext_list.rs b/tfhe/src/high_level_api/compressed_ciphertext_list.rs
-index 7492a134a..478f45f8e 100644
+index 7492a134..478f45f8 100644
 --- a/tfhe/src/high_level_api/compressed_ciphertext_list.rs
 +++ b/tfhe/src/high_level_api/compressed_ciphertext_list.rs
 @@ -158,6 +158,8 @@ impl CompressedCiphertextListBuilder {
@@ -5475,19 +5521,20 @@ index 7492a134a..478f45f8e 100644
              Some(InternalServerKey::Cuda(cuda_key)) => {
                  let mut cuda_radixes = vec![];
 diff --git a/tfhe/src/high_level_api/global_state.rs b/tfhe/src/high_level_api/global_state.rs
-index c134eda58..a177e35b3 100644
+index c134eda5..adcc80f4 100644
 --- a/tfhe/src/high_level_api/global_state.rs
 +++ b/tfhe/src/high_level_api/global_state.rs
-@@ -8,6 +8,8 @@ use crate::high_level_api::keys::{InternalServerKey, ServerKey};
+@@ -8,6 +8,9 @@ use crate::high_level_api::keys::{InternalServerKey, ServerKey};
  use crate::integer::gpu::CudaServerKey;
  use std::cell::RefCell;
  
++#[cfg(feature = "fpga")]
 +use super::BelfortServerKey;
 +
  /// We store the internal keys as thread local, meaning each thread has its own set of keys.
  ///
  /// This means that the user can do computations in multiple threads
-@@ -118,6 +120,8 @@ pub(in crate::high_level_api) fn device_of_internal_keys() -> Option<crate::Devi
+@@ -118,6 +121,8 @@ pub(in crate::high_level_api) fn device_of_internal_keys() -> Option<crate::Devi
          let cell = keys.borrow();
          Some(match cell.as_ref()? {
              InternalServerKey::Cpu(_) => crate::Device::Cpu,
@@ -5496,7 +5543,7 @@ index c134eda58..a177e35b3 100644
              #[cfg(feature = "gpu")]
              InternalServerKey::Cuda(_) => crate::Device::CudaGpu,
          })
-@@ -131,6 +135,8 @@ pub(in crate::high_level_api) fn tag_of_internal_server_key() -> crate::Result<c
+@@ -131,6 +136,8 @@ pub(in crate::high_level_api) fn tag_of_internal_server_key() -> crate::Result<c
          let cell = keys.borrow();
          Ok(match cell.as_ref().ok_or(UninitializedServerKey)? {
              InternalServerKey::Cpu(cpu_key) => cpu_key.tag.clone(),
@@ -5505,7 +5552,7 @@ index c134eda58..a177e35b3 100644
              #[cfg(feature = "gpu")]
              InternalServerKey::Cuda(cuda_key) => cuda_key.tag.clone(),
          })
-@@ -151,6 +157,34 @@ where
+@@ -151,6 +158,35 @@ where
              .unwrap_display();
          match key {
              InternalServerKey::Cpu(key) => func(key),
@@ -5520,6 +5567,7 @@ index c134eda58..a177e35b3 100644
 +}
 +
 +#[inline]
++#[cfg(feature = "fpga")]
 +pub(crate) fn with_fpga_internal_keys<T, F>(func: F) -> T
 +where
 +    F: FnOnce(&BelfortServerKey) -> T,
@@ -5541,7 +5589,7 @@ index c134eda58..a177e35b3 100644
              InternalServerKey::Cuda(_) => {
                  panic!("Cpu key requested but only cuda key is available")
 diff --git a/tfhe/src/high_level_api/integers/oprf.rs b/tfhe/src/high_level_api/integers/oprf.rs
-index 4ee3ec104..bd89ad82a 100644
+index 4ee3ec10..bd89ad82 100644
 --- a/tfhe/src/high_level_api/integers/oprf.rs
 +++ b/tfhe/src/high_level_api/integers/oprf.rs
 @@ -34,6 +34,18 @@ impl<Id: FheUintId> FheUint<Id> {
@@ -5622,7 +5670,7 @@ index 4ee3ec104..bd89ad82a 100644
              InternalServerKey::Cuda(_) => {
                  todo!("Cuda devices do not yet support oblivious pseudo random generation")
 diff --git a/tfhe/src/high_level_api/integers/signed/base.rs b/tfhe/src/high_level_api/integers/signed/base.rs
-index e0c6c9351..7b3dc4a15 100644
+index e0c6c935..7b3dc4a1 100644
 --- a/tfhe/src/high_level_api/integers/signed/base.rs
 +++ b/tfhe/src/high_level_api/integers/signed/base.rs
 @@ -185,6 +185,14 @@ where
@@ -5891,7 +5939,7 @@ index e0c6c9351..7b3dc4a15 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner = cuda_key.key.key.cast_to_signed(
 diff --git a/tfhe/src/high_level_api/integers/signed/inner.rs b/tfhe/src/high_level_api/integers/signed/inner.rs
-index dfcc9e156..1a029239c 100644
+index dfcc9e15..1a029239 100644
 --- a/tfhe/src/high_level_api/integers/signed/inner.rs
 +++ b/tfhe/src/high_level_api/integers/signed/inner.rs
 @@ -190,6 +190,10 @@ impl RadixCiphertext {
@@ -5906,7 +5954,7 @@ index dfcc9e156..1a029239c 100644
              (Self::Cuda(_), Device::CudaGpu) => {
                  // Nothing to do, we already are on the correct device
 diff --git a/tfhe/src/high_level_api/integers/signed/ops.rs b/tfhe/src/high_level_api/integers/signed/ops.rs
-index 4da473b75..431049217 100644
+index 4da473b7..43104921 100644
 --- a/tfhe/src/high_level_api/integers/signed/ops.rs
 +++ b/tfhe/src/high_level_api/integers/signed/ops.rs
 @@ -66,6 +66,26 @@ where
@@ -6472,7 +6520,7 @@ index 4da473b75..431049217 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner_result = cuda_key.key.key.bitnot(&*self.ciphertext.on_gpu(), streams);
 diff --git a/tfhe/src/high_level_api/integers/signed/overflowing_ops.rs b/tfhe/src/high_level_api/integers/signed/overflowing_ops.rs
-index c628ba039..1b3adb53e 100644
+index c628ba03..1b3adb53 100644
 --- a/tfhe/src/high_level_api/integers/signed/overflowing_ops.rs
 +++ b/tfhe/src/high_level_api/integers/signed/overflowing_ops.rs
 @@ -52,6 +52,17 @@ where
@@ -6568,7 +6616,7 @@ index c628ba039..1b3adb53e 100644
              InternalServerKey::Cuda(_) => {
                  todo!("Cuda devices do not support signed integer");
 diff --git a/tfhe/src/high_level_api/integers/signed/scalar_ops.rs b/tfhe/src/high_level_api/integers/signed/scalar_ops.rs
-index cb79e4ffb..d6b6d4005 100644
+index cb79e4ff..d6b6d400 100644
 --- a/tfhe/src/high_level_api/integers/signed/scalar_ops.rs
 +++ b/tfhe/src/high_level_api/integers/signed/scalar_ops.rs
 @@ -53,6 +53,14 @@ where
@@ -7143,7 +7191,7 @@ index cb79e4ffb..d6b6d4005 100644
                  InternalServerKey::Cuda(_) => {
                      panic!("RemAssign '%=' with clear value is not yet supported by Cuda devices")
 diff --git a/tfhe/src/high_level_api/integers/unsigned/base.rs b/tfhe/src/high_level_api/integers/unsigned/base.rs
-index d79bafe82..cd4abd591 100644
+index d79bafe8..cd4abd59 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/base.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/base.rs
 @@ -223,6 +223,14 @@ where
@@ -7471,7 +7519,7 @@ index d79bafe82..cd4abd591 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner = cuda_key.key.key.cast_to_unsigned(
 diff --git a/tfhe/src/high_level_api/integers/unsigned/encrypt.rs b/tfhe/src/high_level_api/integers/unsigned/encrypt.rs
-index 593e580e6..5cea59a9d 100644
+index 593e580e..5cea59a9 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/encrypt.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/encrypt.rs
 @@ -114,6 +114,14 @@ where
@@ -7490,7 +7538,7 @@ index 593e580e6..5cea59a9d 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner: CudaUnsignedRadixCiphertext = cuda_key.key.key.create_trivial_radix(
 diff --git a/tfhe/src/high_level_api/integers/unsigned/inner.rs b/tfhe/src/high_level_api/integers/unsigned/inner.rs
-index 8ef5e2888..c801db11b 100644
+index 8ef5e288..c801db11 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/inner.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/inner.rs
 @@ -194,6 +194,10 @@ impl RadixCiphertext {
@@ -7505,7 +7553,7 @@ index 8ef5e2888..c801db11b 100644
              (Self::Cuda(_), Device::CudaGpu) => {
                  // Nothing to do, we already are on the correct device
 diff --git a/tfhe/src/high_level_api/integers/unsigned/ops.rs b/tfhe/src/high_level_api/integers/unsigned/ops.rs
-index 78f28bb27..f32c85b76 100644
+index 78f28bb2..fb961ee8 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/ops.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/ops.rs
 @@ -72,6 +72,25 @@ where
@@ -7816,7 +7864,7 @@ index 78f28bb27..f32c85b76 100644
 +                    #[cfg(feature = "fpga")]
 +                    InternalServerKey::Belfort(fpga_key) => {
 +                        let inner_result =
-+                            fpga_key.left_shift(&*lhs.ciphertext.on_cpu(), &*rhs.ciphertext.on_cpu());
++                            fpga_key.left_shift(&*lhs.ciphertext.on_cpu(), &rhs.ciphertext.on_cpu());
 +                        FheUint::new(inner_result, fpga_key.tag.clone())
 +                    }
                      #[cfg(feature = "gpu")]
@@ -7833,7 +7881,7 @@ index 78f28bb27..f32c85b76 100644
 +                    #[cfg(feature = "fpga")]
 +                    InternalServerKey::Belfort(fpga_key) => {
 +                        let inner_result =
-+                            fpga_key.right_shift(&*lhs.ciphertext.on_cpu(), &*rhs.ciphertext.on_cpu());
++                            fpga_key.right_shift(&*lhs.ciphertext.on_cpu(), &rhs.ciphertext.on_cpu());
 +                        FheUint::new(inner_result, fpga_key.tag.clone())
 +                    }
                      #[cfg(feature = "gpu")]
@@ -7850,7 +7898,7 @@ index 78f28bb27..f32c85b76 100644
 +                    #[cfg(feature = "fpga")]
 +                    InternalServerKey::Belfort(fpga_key) => {
 +                        let inner_result =
-+                            fpga_key.rotate_left(&*lhs.ciphertext.on_cpu(), &*rhs.ciphertext.on_cpu());
++                            fpga_key.rotate_left(&*lhs.ciphertext.on_cpu(), &rhs.ciphertext.on_cpu());
 +                        FheUint::new(inner_result, fpga_key.tag.clone())
 +                    }
                      #[cfg(feature = "gpu")]
@@ -7867,7 +7915,7 @@ index 78f28bb27..f32c85b76 100644
 +                    #[cfg(feature = "fpga")]
 +                    InternalServerKey::Belfort(fpga_key) => {
 +                        let inner_result =
-+                            fpga_key.rotate_right(&*lhs.ciphertext.on_cpu(), &*rhs.ciphertext.on_cpu());
++                            fpga_key.rotate_right(&*lhs.ciphertext.on_cpu(), &rhs.ciphertext.on_cpu());
 +                        FheUint::new(inner_result, fpga_key.tag.clone())
 +                    }
                      #[cfg(feature = "gpu")]
@@ -7974,48 +8022,46 @@ index 78f28bb27..f32c85b76 100644
              }
 +            #[cfg(feature = "fpga")]
 +            InternalServerKey::Belfort(fpga_key) => {
-+                fpga_key.left_shift_assign(self.ciphertext.as_cpu_mut(), &*rhs.ciphertext.on_cpu());
++                fpga_key.left_shift_assign(self.ciphertext.as_cpu_mut(), &rhs.ciphertext.on_cpu());
 +            }
              #[cfg(feature = "gpu")]
              InternalServerKey::Cuda(cuda_key) => {
                  with_thread_local_cuda_streams(|streams| {
-@@ -1740,6 +1952,11 @@ where
+@@ -1740,6 +1952,10 @@ where
+                     &rhs.ciphertext.on_cpu(),
+                 );
+             }
++            #[cfg(feature = "fpga")]
++            InternalServerKey::Belfort(fpga_key) => {
++                fpga_key.right_shift_assign(self.ciphertext.as_cpu_mut(), &rhs.ciphertext.on_cpu());
++            }
+             #[cfg(feature = "gpu")]
+             InternalServerKey::Cuda(cuda_key) => {
+                 with_thread_local_cuda_streams(|streams| {
+@@ -1795,6 +2011,10 @@ where
+                     &rhs.ciphertext.on_cpu(),
+                 );
+             }
++            #[cfg(feature = "fpga")]
++            InternalServerKey::Belfort(fpga_key) => {
++                fpga_key.rotate_left_assign(self.ciphertext.as_cpu_mut(), &rhs.ciphertext.on_cpu());
++            }
+             #[cfg(feature = "gpu")]
+             InternalServerKey::Cuda(cuda_key) => {
+                 with_thread_local_cuda_streams(|streams| {
+@@ -1850,6 +2070,11 @@ where
                      &rhs.ciphertext.on_cpu(),
                  );
              }
 +            #[cfg(feature = "fpga")]
 +            InternalServerKey::Belfort(fpga_key) => {
 +                fpga_key
-+                    .right_shift_assign(self.ciphertext.as_cpu_mut(), &*rhs.ciphertext.on_cpu());
++                    .rotate_right_assign(self.ciphertext.as_cpu_mut(), &rhs.ciphertext.on_cpu());
 +            }
              #[cfg(feature = "gpu")]
              InternalServerKey::Cuda(cuda_key) => {
                  with_thread_local_cuda_streams(|streams| {
-@@ -1795,6 +2012,11 @@ where
-                     &rhs.ciphertext.on_cpu(),
-                 );
-             }
-+            #[cfg(feature = "fpga")]
-+            InternalServerKey::Belfort(fpga_key) => {
-+                fpga_key
-+                    .rotate_left_assign(self.ciphertext.as_cpu_mut(), &*rhs.ciphertext.on_cpu());
-+            }
-             #[cfg(feature = "gpu")]
-             InternalServerKey::Cuda(cuda_key) => {
-                 with_thread_local_cuda_streams(|streams| {
-@@ -1850,6 +2072,11 @@ where
-                     &rhs.ciphertext.on_cpu(),
-                 );
-             }
-+            #[cfg(feature = "fpga")]
-+            InternalServerKey::Belfort(fpga_key) => {
-+                fpga_key
-+                    .rotate_right_assign(self.ciphertext.as_cpu_mut(), &*rhs.ciphertext.on_cpu());
-+            }
-             #[cfg(feature = "gpu")]
-             InternalServerKey::Cuda(cuda_key) => {
-                 with_thread_local_cuda_streams(|streams| {
-@@ -1931,6 +2158,14 @@ where
+@@ -1931,6 +2156,14 @@ where
                      .neg_parallelized(&*self.ciphertext.on_cpu());
                  FheUint::new(ciphertext, cpu_key.tag.clone())
              }
@@ -8030,7 +8076,7 @@ index 78f28bb27..f32c85b76 100644
              #[cfg(feature = "gpu")]
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner_result = cuda_key.key.key.neg(&*self.ciphertext.on_gpu(), streams);
-@@ -1997,6 +2232,11 @@ where
+@@ -1997,6 +2230,11 @@ where
                  let ciphertext = cpu_key.pbs_key().bitnot(&*self.ciphertext.on_cpu());
                  FheUint::new(ciphertext, cpu_key.tag.clone())
              }
@@ -8043,7 +8089,7 @@ index 78f28bb27..f32c85b76 100644
              InternalServerKey::Cuda(cuda_key) => with_thread_local_cuda_streams(|streams| {
                  let inner_result = cuda_key.key.key.bitnot(&*self.ciphertext.on_gpu(), streams);
 diff --git a/tfhe/src/high_level_api/integers/unsigned/overflowing_ops.rs b/tfhe/src/high_level_api/integers/unsigned/overflowing_ops.rs
-index 309aae827..36244c419 100644
+index 309aae82..36244c41 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/overflowing_ops.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/overflowing_ops.rs
 @@ -52,6 +52,18 @@ where
@@ -8140,7 +8186,7 @@ index 309aae827..36244c419 100644
              InternalServerKey::Cuda(_) => {
                  todo!("Cuda devices do not support overflowing_mul");
 diff --git a/tfhe/src/high_level_api/integers/unsigned/scalar_ops.rs b/tfhe/src/high_level_api/integers/unsigned/scalar_ops.rs
-index 7c35e50df..2fe2469ab 100644
+index 7c35e50d..4a1cf2c7 100644
 --- a/tfhe/src/high_level_api/integers/unsigned/scalar_ops.rs
 +++ b/tfhe/src/high_level_api/integers/unsigned/scalar_ops.rs
 @@ -60,6 +60,11 @@ where
@@ -8452,7 +8498,7 @@ index 7c35e50df..2fe2469ab 100644
 +                #[cfg(feature = "fpga")]
 +InternalServerKey::Belfort(fpga_key) => {
 +                    let inner_result =
-+                        fpga_key.scalar_div(&*lhs.ciphertext.on_cpu(), rhs);
++                        fpga_key.scalar_div(&lhs.ciphertext.on_cpu(), rhs);
 +                    RadixCiphertext::Cpu(inner_result)
 +                }
                  #[cfg(feature = "gpu")]
@@ -8628,7 +8674,7 @@ index 7c35e50df..2fe2469ab 100644
                  InternalServerKey::Cuda(_) => {
                      panic!("RemAssign '%=' with clear value is not yet supported by Cuda devices")
 diff --git a/tfhe/src/high_level_api/keys/mod.rs b/tfhe/src/high_level_api/keys/mod.rs
-index c803b4557..b4037ca9a 100644
+index c803b455..b4037ca9 100644
 --- a/tfhe/src/high_level_api/keys/mod.rs
 +++ b/tfhe/src/high_level_api/keys/mod.rs
 @@ -2,7 +2,7 @@ mod client;
@@ -8650,7 +8696,7 @@ index c803b4557..b4037ca9a 100644
  pub(in crate::high_level_api) use inner::{
      IntegerClientKey, IntegerCompactPublicKey, IntegerCompressedCompactPublicKey,
 diff --git a/tfhe/src/high_level_api/keys/server.rs b/tfhe/src/high_level_api/keys/server.rs
-index e360482ce..28e1bf9d5 100644
+index e360482c..d141575d 100644
 --- a/tfhe/src/high_level_api/keys/server.rs
 +++ b/tfhe/src/high_level_api/keys/server.rs
 @@ -122,6 +122,16 @@ impl ServerKey {
@@ -8659,8 +8705,8 @@ index e360482ce..28e1bf9d5 100644
  
 +#[cfg(feature = "fpga")]
 +impl From<&BelfortServerKey> for ServerKey {
-+    fn from(fpga_key: &BelfortServerKey) -> ServerKey {
-+        ServerKey {
++    fn from(fpga_key: &BelfortServerKey) -> Self {
++        Self {
 +            key: fpga_key.key.clone(),
 +            tag: fpga_key.tag.clone(),
 +        }
@@ -8721,7 +8767,7 @@ index e360482ce..28e1bf9d5 100644
  
  impl ParameterSetConformant for ServerKey {
 diff --git a/tfhe/src/high_level_api/mod.rs b/tfhe/src/high_level_api/mod.rs
-index 99d925b1f..2dd0f0bbf 100644
+index 99d925b1..2dd0f0bb 100644
 --- a/tfhe/src/high_level_api/mod.rs
 +++ b/tfhe/src/high_level_api/mod.rs
 @@ -55,8 +55,8 @@ pub use integers::{CompressedFheInt, CompressedFheUint, FheInt, FheUint, Integer
@@ -8754,7 +8800,7 @@ index 99d925b1f..2dd0f0bbf 100644
  
  #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 diff --git a/tfhe/src/high_level_api/tests/tags_on_entities.rs b/tfhe/src/high_level_api/tests/tags_on_entities.rs
-index ce8195860..55667a96a 100644
+index ce819586..55667a96 100644
 --- a/tfhe/src/high_level_api/tests/tags_on_entities.rs
 +++ b/tfhe/src/high_level_api/tests/tags_on_entities.rs
 @@ -5,10 +5,11 @@ use crate::shortint::parameters::list_compression::COMP_PARAM_MESSAGE_2_CARRY_2_
@@ -8787,7 +8833,7 @@ index ce8195860..55667a96a 100644
  
      // Check encrypting regular ct with client key
 diff --git a/tfhe/src/integer/ciphertext/compact_list.rs b/tfhe/src/integer/ciphertext/compact_list.rs
-index b7910ff56..7ce36565b 100644
+index b7910ff5..7ce36565 100644
 --- a/tfhe/src/integer/ciphertext/compact_list.rs
 +++ b/tfhe/src/integer/ciphertext/compact_list.rs
 @@ -1015,6 +1015,16 @@ impl IntegerProvenCompactCiphertextListConformanceParams {
@@ -8809,7 +8855,7 @@ index b7910ff56..7ce36565b 100644
              encryption_lwe_dimension: value.encryption_lwe_dimension,
 diff --git a/tfhe/src/integer/fpga/mod.rs b/tfhe/src/integer/fpga/mod.rs
 new file mode 100644
-index 000000000..9e69b178f
+index 00000000..9e69b178
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/mod.rs
 @@ -0,0 +1,2 @@
@@ -8817,10 +8863,10 @@ index 000000000..9e69b178f
 +pub use server_key::BelfortServerKey;
 diff --git a/tfhe/src/integer/fpga/server_key/comparator.rs b/tfhe/src/integer/fpga/server_key/comparator.rs
 new file mode 100644
-index 000000000..abe9c6a43
+index 00000000..f8792e10
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/comparator.rs
-@@ -0,0 +1,1297 @@
+@@ -0,0 +1,1295 @@
 +use crate::core_crypto::algorithms::{
 +    lwe_ciphertext_plaintext_sub_assign, lwe_ciphertext_sub_assign,
 +};
@@ -8835,7 +8881,7 @@ index 000000000..abe9c6a43
 +use crate::shortint::Ciphertext;
 +
 +/// Simple enum to select which comparison we are performing
-+#[derive(PartialEq, Clone)]
++#[derive(PartialEq, Eq, Clone)]
 +pub enum ComparisonSelector {
 +    Gt,
 +    Ge,
@@ -8882,7 +8928,7 @@ index 000000000..abe9c6a43
 +        };
 +        let lut_reduce_two_orderings = {
 +            let func = |x| {
-+                let msb = (x >> 2) & (3 as u64);
++                let msb = (x >> 2) & 3_u64;
 +                let lsb = x & 3;
 +
 +                if msb == 1 {
@@ -9057,11 +9103,9 @@ index 000000000..abe9c6a43
 +
 +        // Here Lhs can have the following values: (-1) % (message modulus * carry modulus), 0, 1
 +        // So the output values after the addition will be: 0, 1, 2
-+        lhs_chunks
-+            .iter_mut()
-+            .for_each(|lhs_block: &mut Ciphertext| {
-+                shortint_key.unchecked_scalar_add_assign(lhs_block, 1);
-+            });
++        for lhs_block in lhs_chunks.iter_mut() {
++            shortint_key.unchecked_scalar_add_assign(lhs_block, 1);
++        }
 +
 +        lhs_chunks
 +    }
@@ -9072,7 +9116,7 @@ index 000000000..abe9c6a43
 +    fn reduce_signs_pack(
 +        &self,
 +        mut sign_blocks: Vec<Ciphertext>,
-+        selector: ComparisonSelector,
++        selector: &ComparisonSelector,
 +    ) -> Ciphertext {
 +        while sign_blocks.len() > 2 {
 +            let mut sign_blocks_packed: Vec<Ciphertext> = sign_blocks
@@ -9121,7 +9165,7 @@ index 000000000..abe9c6a43
 +                        u64::from(result == Self::IS_INFERIOR || result == Self::IS_EQUAL)
 +                    },
 +                    ComparisonSelector::None => |x| {
-+                        let msb = (x >> 2) & (3 as u64);
++                        let msb = (x >> 2) & 3_u64;
 +                        let lsb = x & 3;
 +
 +                        if msb == Self::IS_EQUAL {
@@ -9159,11 +9203,7 @@ index 000000000..abe9c6a43
 +
 +                        u64::from(result == Self::IS_INFERIOR || result == Self::IS_EQUAL)
 +                    },
-+                    ComparisonSelector::None => |x| {
-+                        let result = x % 3;
-+
-+                        result
-+                    },
++                    ComparisonSelector::None => |x| x % 3,
 +                };
 +                shortint_key.generate_lookup_vector(&func)
 +            };
@@ -9213,7 +9253,7 @@ index 000000000..abe9c6a43
 +                    let result = Comparator::reduce_sign_block(x);
 +
 +                    if result == 0 {
-+                        shortint_key.message_modulus.0 as u64
++                        shortint_key.message_modulus.0
 +                    } else {
 +                        0
 +                    }
@@ -9228,7 +9268,7 @@ index 000000000..abe9c6a43
 +                    let result = x % 3;
 +
 +                    if result == 0 {
-+                        shortint_key.message_modulus.0 as u64
++                        shortint_key.message_modulus.0
 +                    } else {
 +                        0
 +                    }
@@ -9258,7 +9298,7 @@ index 000000000..abe9c6a43
 +    /// Expects the carry buffers to be empty
 +    ///
 +    /// Requires that the RadixCiphertext block have 4 bits minimum (carry + message)    
-+    fn unchecked_compare<T>(&self, lhs: &T, rhs: &T, selector: ComparisonSelector) -> Ciphertext
++    fn unchecked_compare<T>(&self, lhs: &T, rhs: &T, selector: &ComparisonSelector) -> Ciphertext
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
@@ -9268,7 +9308,7 @@ index 000000000..abe9c6a43
 +            let (lhs_last_block, lhs_ls_blocks) = lhs.blocks().split_last().unwrap();
 +            let (rhs_last_block, rhs_ls_blocks) = rhs.blocks().split_last().unwrap();
 +
-+            let mut tmp_comparisons = self.compare_blocks_pack(&lhs_ls_blocks, &rhs_ls_blocks);
++            let mut tmp_comparisons = self.compare_blocks_pack(lhs_ls_blocks, rhs_ls_blocks);
 +
 +            let last_block_cmp = self.compare_blocks_with_sign_bit(lhs_last_block, rhs_last_block);
 +
@@ -9276,13 +9316,18 @@ index 000000000..abe9c6a43
 +
 +            tmp_comparisons
 +        } else {
-+            self.compare_blocks_pack(&lhs.blocks(), &rhs.blocks())
++            self.compare_blocks_pack(lhs.blocks(), rhs.blocks())
 +        };
 +
 +        self.reduce_signs_pack(comparisons, selector)
 +    }
 +
-+    fn smart_compare<T>(&self, lhs: &mut T, rhs: &mut T, selector: ComparisonSelector) -> Ciphertext
++    fn smart_compare<T>(
++        &self,
++        lhs: &mut T,
++        rhs: &mut T,
++        selector: &ComparisonSelector,
++    ) -> Ciphertext
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
@@ -9303,7 +9348,7 @@ index 000000000..abe9c6a43
 +            let (lhs_last_block, lhs_ls_blocks) = lhs.blocks().split_last().unwrap();
 +            let (rhs_last_block, rhs_ls_blocks) = rhs.blocks().split_last().unwrap();
 +
-+            let mut tmp_comparisons = self.compare_blocks_pack(&lhs_ls_blocks, &rhs_ls_blocks);
++            let mut tmp_comparisons = self.compare_blocks_pack(lhs_ls_blocks, rhs_ls_blocks);
 +
 +            let last_block_cmp = self.compare_blocks_with_sign_bit(lhs_last_block, rhs_last_block);
 +
@@ -9311,7 +9356,7 @@ index 000000000..abe9c6a43
 +
 +            tmp_comparisons
 +        } else {
-+            self.compare_blocks_pack(&lhs.blocks(), &rhs.blocks())
++            self.compare_blocks_pack(lhs.blocks(), rhs.blocks())
 +        };
 +
 +        self.reduce_signs_for_min_max_pack(comparisons)
@@ -9360,7 +9405,7 @@ index 000000000..abe9c6a43
 +            .iter()
 +            .zip(rhs_blocks.iter())
 +            .map(|(lhs_block, rhs_block)| {
-+                let mut result = shortint_server_key.unchecked_add(&lhs_block, &rhs_block);
++                let mut result = shortint_server_key.unchecked_add(lhs_block, rhs_block);
 +                // We know that one of either blocks is 0
 +                result.degree = Degree::new(shortint_server_key.message_modulus.0 - 1);
 +                result
@@ -9387,7 +9432,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.unchecked_compare(lhs, rhs, ComparisonSelector::Gt);
++        let comparison = self.unchecked_compare(lhs, rhs, &ComparisonSelector::Gt);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9395,7 +9440,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.unchecked_compare(lhs, rhs, ComparisonSelector::Ge);
++        let comparison = self.unchecked_compare(lhs, rhs, &ComparisonSelector::Ge);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9403,7 +9448,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.unchecked_compare(lhs, rhs, ComparisonSelector::Lt);
++        let comparison = self.unchecked_compare(lhs, rhs, &ComparisonSelector::Lt);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9411,7 +9456,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.unchecked_compare(lhs, rhs, ComparisonSelector::Le);
++        let comparison = self.unchecked_compare(lhs, rhs, &ComparisonSelector::Le);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9437,7 +9482,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.smart_compare(lhs, rhs, ComparisonSelector::Gt);
++        let comparison = self.smart_compare(lhs, rhs, &ComparisonSelector::Gt);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9445,7 +9490,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.smart_compare(lhs, rhs, ComparisonSelector::Ge);
++        let comparison = self.smart_compare(lhs, rhs, &ComparisonSelector::Ge);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9453,7 +9498,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.smart_compare(lhs, rhs, ComparisonSelector::Lt);
++        let comparison = self.smart_compare(lhs, rhs, &ComparisonSelector::Lt);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9461,7 +9506,7 @@ index 000000000..abe9c6a43
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let comparison = self.smart_compare(lhs, rhs, ComparisonSelector::Le);
++        let comparison = self.smart_compare(lhs, rhs, &ComparisonSelector::Le);
 +        BooleanBlock::new_unchecked(comparison)
 +    }
 +
@@ -9874,7 +9919,7 @@ index 000000000..abe9c6a43
 +                        Self::IS_SUPERIOR
 +                    };
 +                    let x = (msb << 2) + lsb;
-+                    let m = (x >> 2) & (3 as u64);
++                    let m = (x >> 2) & 3_u64;
 +                    let l = x & 3;
 +                    let final_sign = if m == Self::IS_EQUAL { l } else { m };
 +                    u64::from(final_sign == Self::IS_SUPERIOR)
@@ -9886,7 +9931,7 @@ index 000000000..abe9c6a43
 +                        Self::IS_SUPERIOR
 +                    };
 +                    let x = (msb << 2) + lsb;
-+                    let m = (x >> 2) & (3 as u64);
++                    let m = (x >> 2) & 3_u64;
 +                    let l = x & 3;
 +                    let final_sign = if m == Self::IS_EQUAL { l } else { m };
 +                    u64::from(final_sign == Self::IS_SUPERIOR || final_sign == Self::IS_EQUAL)
@@ -9898,7 +9943,7 @@ index 000000000..abe9c6a43
 +                        Self::IS_SUPERIOR
 +                    };
 +                    let x = (msb << 2) + lsb;
-+                    let m = (x >> 2) & (3 as u64);
++                    let m = (x >> 2) & 3_u64;
 +                    let l = x & 3;
 +                    let final_sign = if m == Self::IS_EQUAL { l } else { m };
 +                    u64::from(final_sign == Self::IS_INFERIOR)
@@ -9910,7 +9955,7 @@ index 000000000..abe9c6a43
 +                        Self::IS_SUPERIOR
 +                    };
 +                    let x = (msb << 2) + lsb;
-+                    let m = (x >> 2) & (3 as u64);
++                    let m = (x >> 2) & 3_u64;
 +                    let l = x & 3;
 +                    let final_sign = if m == Self::IS_EQUAL { l } else { m };
 +                    u64::from(final_sign == Self::IS_INFERIOR || final_sign == Self::IS_EQUAL)
@@ -9922,7 +9967,7 @@ index 000000000..abe9c6a43
 +                        Self::IS_SUPERIOR
 +                    };
 +                    let x = (msb << 2) + lsb;
-+                    let m = (x >> 2) & (3 as u64);
++                    let m = (x >> 2) & 3_u64;
 +                    let l = x & 3;
 +                    if m == Self::IS_EQUAL {
 +                        l
@@ -9968,20 +10013,19 @@ index 000000000..abe9c6a43
 +                            &scalar_blocks,
 +                        );
 +
-+                        self.reduce_signs_pack(lsb_signs, ComparisonSelector::None)
++                        self.reduce_signs_pack(lsb_signs, &ComparisonSelector::None)
 +                    },
 +                    self.server_key.are_all_blocks_zero(most_significant_blocks),
 +                );
 +
 +                let lut = lut_selection(selector);
-+                let luts = vec![lut];
 +
 +                let mut prepared_blocks = self
 +                    .server_key
-+                    .prepare_bivariate(&mut vec![lsb_sign], &vec![are_all_msb_equal_to_zero]);
++                    .prepare_bivariate(&mut [lsb_sign], &[are_all_msb_equal_to_zero]);
 +
 +                self.server_key
-+                    .apply_lookup_vector_packed_assign(&mut prepared_blocks, &luts);
++                    .apply_lookup_vector_packed_assign(&mut prepared_blocks, &[lut]);
 +
 +                prepared_blocks[0].clone()
 +            }
@@ -9994,7 +10038,7 @@ index 000000000..abe9c6a43
 +                    &scalar_blocks,
 +                );
 +
-+                self.reduce_signs_pack(signs, selector)
++                self.reduce_signs_pack(signs, &selector)
 +            }
 +            (true, false) => {
 +                // We only have to compare blocks with zero
@@ -10037,7 +10081,7 @@ index 000000000..abe9c6a43
 +                let mut packed_lhs = self.pack_block_chunk(lhs_chunk);
 +
 +                let delta = (1u64 << (u64::BITS as u64 - 1))
-+                    / (packed_lhs.carry_modulus.0 * packed_lhs.message_modulus.0) as u64;
++                    / (packed_lhs.carry_modulus.0 * packed_lhs.message_modulus.0);
 +                let plaintext = Plaintext((packed_scalar as u64) * delta);
 +
 +                lwe_ciphertext_plaintext_sub_assign(&mut packed_lhs.ct, plaintext);
@@ -10048,9 +10092,9 @@ index 000000000..abe9c6a43
 +        self.server_key
 +            .apply_same_lookup_vector_packed_assign(&mut signs, self.sign_lut);
 +
-+        signs.iter_mut().for_each(|signs_block| {
++        for signs_block in signs.iter_mut() {
 +            shortint_key.unchecked_scalar_add_assign(signs_block, 1);
-+        });
++        }
 +
 +        signs
 +    }
@@ -10120,10 +10164,10 @@ index 000000000..abe9c6a43
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/fpga.rs b/tfhe/src/integer/fpga/server_key/fpga.rs
 new file mode 100644
-index 000000000..88fceb214
+index 00000000..7a0abc50
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/fpga.rs
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,143 @@
 +use crate::core_crypto::fpga::keyswitch_bootstrap::KeyswitchBootstrapPacked;
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::high_level_api::Tag;
@@ -10167,24 +10211,11 @@ index 000000000..88fceb214
 +        &self.tag
 +    }
 +
-+    pub fn apply_lookup_vector_packed(
-+        &self,
-+        cts: Vec<&Ciphertext>,
-+        luts: &Vec<LookupVector>,
-+    ) -> Vec<Ciphertext> {
-+        let mut ct_ress: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
-+
-+        self.fpga_utils
-+            .keyswitch_bootstrap_packed(&mut ct_ress, luts);
-+
-+        ct_ress
-+    }
-+
 +    #[cfg(not(feature = "emulate_fpga"))]
 +    fn apply_keyswitch_bootstrap_on_trivials(
 +        &self,
 +        cts: &mut Vec<Ciphertext>,
-+        luts: &Vec<LookupVector>,
++        luts: &[LookupVector],
 +    ) {
 +        use rayon::iter::*;
 +        use std::sync::Arc;
@@ -10205,7 +10236,7 @@ index 000000000..88fceb214
 +    pub fn apply_lookup_vector_packed_assign(
 +        &self,
 +        cts: &mut Vec<Ciphertext>,
-+        luts: &Vec<LookupVector>,
++        luts: &[LookupVector],
 +    ) {
 +        #[cfg(not(feature = "emulate_fpga"))]
 +        {
@@ -10242,7 +10273,7 @@ index 000000000..88fceb214
 +
 +        self.apply_lookup_vector_packed_assign(&mut cts, &luts);
 +
-+        *ciphertext = cts.first().unwrap().clone();
++        ciphertext.clone_from(cts.first().unwrap());
 +    }
 +
 +    pub fn apply_same_lookup_vector_mut_packed_assign(
@@ -10258,7 +10289,7 @@ index 000000000..88fceb214
 +    pub fn apply_lookup_vector_mut_packed_assign(
 +        &self,
 +        ciphertext: &mut Vec<&mut Ciphertext>,
-+        luts: &Vec<LookupVector>,
++        luts: &[LookupVector],
 +    ) {
 +        let mut ct_vec: Vec<Ciphertext> = ciphertext
 +            .iter_mut()
@@ -10266,7 +10297,7 @@ index 000000000..88fceb214
 +            .collect();
 +
 +        #[cfg(feature = "fpga")]
-+        self.apply_lookup_vector_packed_assign(&mut ct_vec, &luts);
++        self.apply_lookup_vector_packed_assign(&mut ct_vec, luts);
 +
 +        #[cfg(not(feature = "fpga"))]
 +        {
@@ -10277,12 +10308,12 @@ index 000000000..88fceb214
 +        ciphertext
 +            .iter_mut()
 +            .enumerate()
-+            .for_each(|(i, block)| **block = ct_vec[i].clone());
++            .for_each(|(i, block)| (*block).clone_from(&ct_vec[i]));
 +    }
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/luts.rs b/tfhe/src/integer/fpga/server_key/luts.rs
 new file mode 100644
-index 000000000..a92189e68
+index 00000000..8aef50a8
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/luts.rs
 @@ -0,0 +1,28 @@
@@ -10292,34 +10323,34 @@ index 000000000..a92189e68
 +impl BelfortServerKey {
 +    pub fn lut_message_extract(&self) -> LookupVector {
 +        let shortint_key = &self.key.key.key;
-+        let func = |x| (x % (shortint_key.message_modulus.0 as u64));
++        let func = |x| (x % shortint_key.message_modulus.0);
 +        shortint_key.generate_lookup_vector(&func)
 +    }
 +
 +    pub fn lut_carry_extract(&self) -> LookupVector {
 +        let shortint_key = &self.key.key.key;
-+        let func = |x| (x / (shortint_key.message_modulus.0 as u64));
++        let func = |x| (x / shortint_key.message_modulus.0);
 +        shortint_key.generate_lookup_vector(&func)
 +    }
 +
 +    pub fn lut_mul_2lsb(&self) -> LookupVector {
 +        let shortint_key = &self.key.key.key;
-+        let func = |x, y| (x * y) % shortint_key.message_modulus.0 as u64;
++        let func = |x, y| (x * y) % shortint_key.message_modulus.0;
 +        shortint_key.generate_lookup_vector_bivariate(&func)
 +    }
 +
 +    pub fn lut_mul_2msb(&self) -> LookupVector {
 +        let shortint_key = &self.key.key.key;
-+        let func = |x, y| (x * y) / shortint_key.message_modulus.0 as u64;
++        let func = |x, y| (x * y) / shortint_key.message_modulus.0;
 +        shortint_key.generate_lookup_vector_bivariate(&func)
 +    }
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/mod.rs b/tfhe/src/integer/fpga/server_key/mod.rs
 new file mode 100644
-index 000000000..e2421fd0d
+index 00000000..0f9c174a
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/mod.rs
-@@ -0,0 +1,517 @@
+@@ -0,0 +1,483 @@
 +mod comparator;
 +mod fpga;
 +mod luts;
@@ -10334,7 +10365,6 @@ index 000000000..e2421fd0d
 +use crate::high_level_api::keys::ServerKey;
 +use crate::high_level_api::Tag;
 +use crate::integer::IntegerRadixCiphertext;
-+use crate::shortint::ciphertext::NoiseLevel;
 +use crate::shortint::parameters::Degree;
 +use crate::shortint::Ciphertext;
 +
@@ -10350,13 +10380,13 @@ index 000000000..e2421fd0d
 +impl From<&ServerKey> for BelfortServerKey {
 +    fn from(value: &ServerKey) -> Self {
 +        let ServerKey { key, tag } = value.clone();
-+        BelfortServerKey::default(key, tag)
++        Self::default(key, tag)
 +    }
 +}
 +
 +impl From<&IntegerServerKey> for BelfortServerKey {
 +    fn from(value: &IntegerServerKey) -> Self {
-+        BelfortServerKey::default(Arc::new(value.clone()), Tag::default())
++        Self::default(Arc::new(value.clone()), Tag::default())
 +    }
 +}
 +
@@ -10368,14 +10398,14 @@ index 000000000..e2421fd0d
 +            compression_key: None,
 +            decompression_key: None,
 +        };
-+        BelfortServerKey::default(Arc::new(integer_server_key), Tag::default())
++        Self::default(Arc::new(integer_server_key), Tag::default())
 +    }
 +}
 +
 +impl From<Arc<crate::integer::ServerKey>> for BelfortServerKey {
 +    fn from(value: Arc<crate::integer::ServerKey>) -> Self {
 +        let server_key = Arc::unwrap_or_clone(value);
-+        BelfortServerKey::from(&server_key)
++        Self::from(&server_key)
 +    }
 +}
 +
@@ -10384,8 +10414,6 @@ index 000000000..e2421fd0d
 +    Generated = 1,
 +    Propagated = 2,
 +}
-+
-+unsafe impl Send for BelfortServerKey {}
 +
 +impl BelfortServerKey {
 +    pub fn default(key: Arc<IntegerServerKey>, tag: Tag) -> Self {
@@ -10405,7 +10433,7 @@ index 000000000..e2421fd0d
 +    }
 +
 +    /// Executes a full propagate if there are carries.
-+    pub fn conditional_full_propagate<'a, T>(&self, term: &mut T)
++    pub fn conditional_full_propagate<T>(&self, term: &mut T)
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
@@ -10418,28 +10446,7 @@ index 000000000..e2421fd0d
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        let num_blocks = ctxt.blocks().len();
-+        let start_index = ctxt
-+            .blocks()
-+            .iter()
-+            .position(|block| !block.carry_is_empty())
-+            .unwrap_or(num_blocks);
-+
-+        let (to_be_cleaned, to_be_propagated) = ctxt.blocks_mut().split_at_mut(start_index);
-+
-+        if !to_be_propagated.is_empty() {
-+            self.partial_propagate_blocks(to_be_propagated);
-+        }
-+
-+        let mut dirty_vector: Vec<&mut Ciphertext> = to_be_cleaned
-+            .iter_mut()
-+            .filter(|block| block.noise_level > NoiseLevel::NOMINAL)
-+            .collect();
-+
-+        if !dirty_vector.is_empty() {
-+            let message_extract_lut = self.lut_message_extract();
-+            self.apply_same_lookup_vector_mut_packed_assign(&mut dirty_vector, message_extract_lut);
-+        }
++        self.partial_propagate_blocks(ctxt.blocks_mut());
 +    }
 +
 +    /// This function takes an input slice of shortint ciphertext (aka blocks)
@@ -10477,7 +10484,7 @@ index 000000000..e2421fd0d
 +            .par_iter_mut()
 +            .zip(blocks_vec.par_iter())
 +            .for_each(|(block, vec_block)| {
-+                *block = vec_block.clone();
++                block.clone_from(vec_block);
 +            });
 +    }
 +
@@ -10486,7 +10493,7 @@ index 000000000..e2421fd0d
 +
 +        let lut_does_block_generate_carry = {
 +            let func = |x| {
-+                if x >= shortint_key.message_modulus.0 as u64 {
++                if x >= shortint_key.message_modulus.0 {
 +                    OutputCarry::Generated as u64
 +                } else {
 +                    OutputCarry::None as u64
@@ -10496,9 +10503,9 @@ index 000000000..e2421fd0d
 +        };
 +        let lut_does_block_generate_or_propagate = {
 +            let func = |x| {
-+                if x >= shortint_key.message_modulus.0 as u64 {
++                if x >= shortint_key.message_modulus.0 {
 +                    OutputCarry::Generated as u64
-+                } else if x == (shortint_key.message_modulus.0 as u64 - 1) {
++                } else if x == (shortint_key.message_modulus.0 - 1) {
 +                    OutputCarry::Propagated as u64
 +                } else {
 +                    OutputCarry::None as u64
@@ -10559,10 +10566,8 @@ index 000000000..e2421fd0d
 +
 +        let num_blocks = generates_or_propagates.len();
 +
-+        let mut carries_out = self.compute_prefix_sum_hillis_steele(
-+            generates_or_propagates,
-+            "carry_propagation_sum".to_owned(),
-+        );
++        let mut carries_out =
++            self.compute_prefix_sum_hillis_steele(generates_or_propagates, "carry_propagation_sum");
 +
 +        let mut last_block_out_carry = self.key.key.key.create_trivial(0u64);
 +        std::mem::swap(&mut carries_out[num_blocks - 1], &mut last_block_out_carry);
@@ -10576,7 +10581,7 @@ index 000000000..e2421fd0d
 +    pub(crate) fn compute_prefix_sum_hillis_steele(
 +        &self,
 +        mut blocks: Vec<Ciphertext>,
-+        lut_name: String,
++        lut_name: &str,
 +    ) -> Vec<Ciphertext> {
 +        let shortint_key = &self.key.key.key;
 +        debug_assert!(shortint_key.message_modulus.0 * shortint_key.carry_modulus.0 >= (1 << 4));
@@ -10591,7 +10596,7 @@ index 000000000..e2421fd0d
 +        let mut space = 1;
 +        let mut step_output = blocks.clone();
 +
-+        let lut_function: Box<dyn Fn(u64, u64) -> u64> = match lut_name.as_str() {
++        let lut_function: Box<dyn Fn(u64, u64) -> u64> = match lut_name {
 +            "carry_propagation_sum" => Box::new(|msb: u64, lsb: u64| {
 +                if msb == OutputCarry::Propagated as u64 {
 +                    lsb
@@ -10606,7 +10611,7 @@ index 000000000..e2421fd0d
 +                    {
 +                        block_num_bit_count
 +                    } else {
-+                        0 as u64
++                        0_u64
 +                    }
 +                },
 +            ),
@@ -10617,8 +10622,8 @@ index 000000000..e2421fd0d
 +
 +        for _ in 0..num_steps {
 +            let mut prev_block_carries = Vec::with_capacity(num_blocks - space);
-+            for i in 0..(num_blocks - space) {
-+                prev_block_carries.push(blocks[i].clone());
++            for block in blocks.iter().take(num_blocks - space) {
++                prev_block_carries.push(block.clone());
 +            }
 +
 +            let mut step_output_vec = step_output[space..num_blocks].to_vec();
@@ -10669,24 +10674,20 @@ index 000000000..e2421fd0d
 +            .map(|block| block.degree.get())
 +            .unwrap();
 +
-+        if highest_degree <= (shortint_key.message_modulus.0 - 1) * 2 {
-+            self.propagate_single_carry_parallelized_low_latency(blocks);
-+        } else {
-+            let (mut message_blocks, carry_blocks) =
-+                self.extract_message_and_carry_blocks(&blocks.to_vec());
++        if highest_degree > (shortint_key.message_modulus.0 - 1) * 2 {
++            let (mut message_blocks, carry_blocks) = self.extract_message_and_carry_blocks(blocks);
 +
 +            blocks.swap_with_slice(&mut message_blocks);
 +            for (block, carry) in blocks[1..].iter_mut().zip(carry_blocks.iter()) {
 +                shortint_key.unchecked_add_assign(block, carry);
 +            }
-+
-+            self.propagate_single_carry_parallelized_low_latency(&mut blocks[1..]);
 +        }
++        self.propagate_single_carry_parallelized_low_latency(blocks);
 +    }
 +
 +    pub(crate) fn extract_message_and_carry_blocks(
 +        &self,
-+        blocks: &Vec<Ciphertext>,
++        blocks: &[Ciphertext],
 +    ) -> (Vec<Ciphertext>, Vec<Ciphertext>) {
 +        let num_blocks = blocks.len();
 +        let mut luts = Vec::with_capacity(2 * num_blocks);
@@ -10694,8 +10695,8 @@ index 000000000..e2421fd0d
 +        luts.extend(std::iter::repeat(self.lut_carry_extract()).take(num_blocks));
 +
 +        let mut prepared_blocks = Vec::with_capacity(2 * num_blocks);
-+        prepared_blocks.extend(blocks.clone());
-+        prepared_blocks.extend(blocks.clone());
++        prepared_blocks.extend(blocks.to_owned());
++        prepared_blocks.extend(blocks.to_owned());
 +
 +        self.apply_lookup_vector_packed_assign(&mut prepared_blocks, &luts);
 +
@@ -10706,8 +10707,8 @@ index 000000000..e2421fd0d
 +
 +    pub fn prepare_bivariate(
 +        &self,
-+        lhs_blocks: &mut Vec<Ciphertext>,
-+        rhs_blocks: &Vec<Ciphertext>,
++        lhs_blocks: &mut [Ciphertext],
++        rhs_blocks: &[Ciphertext],
 +    ) -> Vec<Ciphertext> {
 +        let mut prepared_blocks = Vec::new();
 +
@@ -10750,6 +10751,7 @@ index 000000000..e2421fd0d
 +            shortint_key.generate_lookup_vector_bivariate(&func)
 +        };
 +
++        // Up-Sweep phase
 +        for i in 0..num_steps {
 +            let two_pow_i_plus_1 = 2_usize.checked_pow(i + 1).unwrap();
 +            let two_pow_i = 2_usize.checked_pow(i).unwrap();
@@ -10768,10 +10770,9 @@ index 000000000..e2421fd0d
 +                });
 +
 +            let mut prepared_blocks = self.prepare_bivariate(&mut current_blocks, &previous_blocks);
-+            let indices_num = prepared_blocks.len();
-+            self.apply_lookup_vector_packed_assign(
++            self.apply_same_lookup_vector_packed_assign(
 +                &mut prepared_blocks,
-+                &vec![lut_vector_carry_propagation_sum; indices_num],
++                lut_vector_carry_propagation_sum,
 +            );
 +
 +            let mut prepared_block_iter = prepared_blocks.into_iter();
@@ -10788,24 +10789,20 @@ index 000000000..e2421fd0d
 +
 +        for i in (0..num_steps).rev() {
 +            let two_pow_i_plus_1 = 2usize.checked_pow(i + 1).unwrap();
-+            let two_pow_i = 2usize.checked_pow(i as u32).unwrap();
++            let two_pow_i = 2usize.checked_pow(i).unwrap();
 +
 +            let mut blocks1 = vec![];
 +            let mut blocks2 = vec![];
 +
-+            (0..num_blocks)
-+                .into_iter()
-+                .step_by(two_pow_i_plus_1)
-+                .for_each(|k| {
-+                    blocks1.push(carry_out[k + two_pow_i - 1].clone());
-+                    blocks2.push(carry_out[k + two_pow_i_plus_1 - 1].clone());
-+                });
++            (0..num_blocks).step_by(two_pow_i_plus_1).for_each(|k| {
++                blocks1.push(carry_out[k + two_pow_i - 1].clone());
++                blocks2.push(carry_out[k + two_pow_i_plus_1 - 1].clone());
++            });
 +
 +            let mut buffer = self.prepare_bivariate(&mut blocks1, &blocks2);
-+            let indices_num = buffer.len();
-+            self.apply_lookup_vector_packed_assign(
++            self.apply_same_lookup_vector_packed_assign(
 +                &mut buffer,
-+                &vec![lut_vector_carry_propagation_sum; indices_num],
++                lut_vector_carry_propagation_sum,
 +            );
 +
 +            let mut drainer = buffer.drain(..);
@@ -10831,15 +10828,15 @@ index 000000000..e2421fd0d
 +        result
 +            .iter_mut()
 +            .zip(ct_right.blocks().iter())
-+            .for_each(|(mut ct_left_i, ct_right_i)| {
-+                self.key.key.pack_block_assign(ct_right_i, &mut ct_left_i)
++            .for_each(|(ct_left_i, ct_right_i)| {
++                self.key.key.pack_block_assign(ct_right_i, ct_left_i)
 +            });
 +        result
 +    }
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/abs.rs b/tfhe/src/integer/fpga/server_key/radix/abs.rs
 new file mode 100644
-index 000000000..de29a0299
+index 00000000..de29a029
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/abs.rs
 @@ -0,0 +1,34 @@
@@ -10879,7 +10876,7 @@ index 000000000..de29a0299
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/add.rs b/tfhe/src/integer/fpga/server_key/radix/add.rs
 new file mode 100644
-index 000000000..a4db918e8
+index 00000000..a4db918e
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/add.rs
 @@ -0,0 +1,153 @@
@@ -11038,7 +11035,7 @@ index 000000000..a4db918e8
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/bit_extractor.rs b/tfhe/src/integer/fpga/server_key/radix/bit_extractor.rs
 new file mode 100644
-index 000000000..f79ea9a39
+index 00000000..11381667
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/bit_extractor.rs
 @@ -0,0 +1,110 @@
@@ -11063,19 +11060,19 @@ index 000000000..f79ea9a39
 +        let mut bit_extract_luts: Vec<LookupVector> = Vec::new();
 +
 +        bit_extract_luts.push({
-+            let lut_scalar_bitand_one = {
++            // Scalar Bitand 1
++            {
 +                let func = |x| x & 1;
 +                shortint_key.generate_lookup_vector(&func)
-+            };
-+            lut_scalar_bitand_one
++            }
 +        });
 +        if bits_per_block == 2 {
 +            bit_extract_luts.push({
-+                let lut_msg_bit1_extract = {
-+                    let func = |x| (x >> 1) & (1 as u64);
++                // Message bit 1 extraction
++                {
++                    let func = |x| (x >> 1) & 1_u64;
 +                    shortint_key.generate_lookup_vector(&func)
-+                };
-+                lut_msg_bit1_extract
++                }
 +            });
 +        }
 +
@@ -11102,19 +11099,19 @@ index 000000000..f79ea9a39
 +        let mut bit_extract_luts: Vec<LookupVector> = Vec::new();
 +
 +        bit_extract_luts.push({
-+            let lut_msg_bit0_extract_offset2 = {
++            // Message bit 0 extraction with offset two
++            {
 +                let func = |x| (x & 1) << 2;
 +                shortint_key.generate_lookup_vector(&func)
-+            };
-+            lut_msg_bit0_extract_offset2
++            }
 +        });
 +        if bits_per_block == 2 {
 +            bit_extract_luts.push({
-+                let lut_msg_bit1_extract_offset2 = {
-+                    let func = |x| ((x >> 1) & (1 as u64)) << 2;
++                // Message bit 1 extraction with offset two
++                {
++                    let func = |x| ((x >> 1) & 1_u64) << 2;
 +                    shortint_key.generate_lookup_vector(&func)
-+                };
-+                lut_msg_bit1_extract_offset2
++                }
 +            });
 +        }
 +
@@ -11132,10 +11129,10 @@ index 000000000..f79ea9a39
 +
 +    pub(crate) fn extract_n_bits(&self, blocks: &[Ciphertext], n: usize) -> Vec<Ciphertext> {
 +        let num_blocks = blocks.len();
-+        let jobs = iproduct!(0..num_blocks, 0..self.bits_per_block)
-+            .take(n)
-+            .collect::<Vec<_>>();
-+        let (blocks_idxs, lut_idxs): (Vec<usize>, Vec<usize>) = jobs.into_iter().unzip();
++        let (blocks_idxs, lut_idxs): (Vec<usize>, Vec<usize>) =
++            iproduct!(0..num_blocks, 0..self.bits_per_block)
++                .take(n)
++                .unzip();
 +        let mut blocks = blocks_idxs
 +            .iter()
 +            .map(|block_idx| blocks[*block_idx].clone())
@@ -11154,7 +11151,7 @@ index 000000000..f79ea9a39
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/bitwise_op.rs b/tfhe/src/integer/fpga/server_key/radix/bitwise_op.rs
 new file mode 100644
-index 000000000..3f395dc4b
+index 00000000..3f395dc4
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/bitwise_op.rs
 @@ -0,0 +1,536 @@
@@ -11696,7 +11693,7 @@ index 000000000..3f395dc4b
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/cmux.rs b/tfhe/src/integer/fpga/server_key/radix/cmux.rs
 new file mode 100644
-index 000000000..6e30dee03
+index 00000000..b7a25ca0
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/cmux.rs
 @@ -0,0 +1,306 @@
@@ -11832,9 +11829,9 @@ index 000000000..6e30dee03
 +
 +        let mut ct_refs = [true_ct, false_ct];
 +
-+        ct_refs.iter_mut().for_each(|ct_ref| {
++        for ct_ref in ct_refs.iter_mut() {
 +            self.conditional_full_propagate(*ct_ref);
-+        });
++        }
 +
 +        let [true_ct, false_ct] = ct_refs;
 +        self.unchecked_if_then_else(condition, true_ct, false_ct)
@@ -11930,7 +11927,7 @@ index 000000000..6e30dee03
 +                .par_iter_mut()
 +                .zip(blocks.par_iter())
 +                .for_each(|(block, vec_block)| {
-+                    *block = vec_block.clone();
++                    block.clone_from(vec_block);
 +                });
 +        }
 +        true_ct
@@ -11977,7 +11974,7 @@ index 000000000..6e30dee03
 +        };
 +
 +        let inverted_predicate_lut = {
-+            let func = |x, y| if y != 1 { 0 } else { x };
++            let func = |x, y| if y == 1 { x } else { 0 };
 +            shortint_key.generate_lookup_vector_bivariate(&func)
 +        };
 +
@@ -11998,17 +11995,17 @@ index 000000000..6e30dee03
 +        let half_len = prepared_blocks.len() / 2;
 +
 +        for (i, block) in prepared_blocks.iter().take(half_len).enumerate() {
-+            ct1_blocks[i] = block.clone();
++            ct1_blocks[i].clone_from(block);
 +        }
 +
 +        for (i, block) in prepared_blocks.iter().skip(half_len).enumerate() {
-+            ct2_blocks[i] = block.clone();
++            ct2_blocks[i].clone_from(block);
 +        }
 +    }
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/comparison.rs b/tfhe/src/integer/fpga/server_key/radix/comparison.rs
 new file mode 100644
-index 000000000..29ae8cdd7
+index 00000000..29ae8cdd
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/comparison.rs
 @@ -0,0 +1,261 @@
@@ -12275,7 +12272,7 @@ index 000000000..29ae8cdd7
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/count_zeros_ones.rs b/tfhe/src/integer/fpga/server_key/radix/count_zeros_ones.rs
 new file mode 100644
-index 000000000..b3ca9dcd4
+index 00000000..b3ca9dcd
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/count_zeros_ones.rs
 @@ -0,0 +1,88 @@
@@ -12369,10 +12366,10 @@ index 000000000..b3ca9dcd4
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/div_mod.rs b/tfhe/src/integer/fpga/server_key/radix/div_mod.rs
 new file mode 100644
-index 000000000..95d188513
+index 00000000..ca5a352a
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/div_mod.rs
-@@ -0,0 +1,719 @@
+@@ -0,0 +1,715 @@
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::integer::ciphertext::{IntegerRadixCiphertext, RadixCiphertext};
 +use crate::integer::server_key::comparator::ZeroComparisonType;
@@ -12422,7 +12419,7 @@ index 000000000..95d188513
 +        let carry_modulus = integer_key.carry_modulus();
 +
 +        let lut_message_extract = {
-+            let func = |x| (x % (shortint_key.message_modulus.0 as u64));
++            let func = |x| (x % shortint_key.message_modulus.0);
 +            shortint_key.generate_lookup_vector(&func)
 +        };
 +
@@ -12658,22 +12655,19 @@ index 000000000..95d188513
 +                self.gen_lut_for_overflows(factor, func)
 +            };
 +
-+            let cleaned_merged_interesting_remainder_luts: Vec<_> = merged_interesting_remainder
++            let cleaned_merged_interesting_remainder_luts = merged_interesting_remainder
 +                .blocks
 +                .iter()
-+                .map(|_| zero_out_if_overflow_did_not_happen_lut.clone())
-+                .collect();
++                .map(|_| zero_out_if_overflow_did_not_happen_lut);
 +
-+            let new_remainder_luts: Vec<_> = new_remainder
++            let new_remainder_luts = new_remainder
 +                .blocks
 +                .iter()
-+                .map(|_| zero_out_if_overflow_happened_lut.clone())
-+                .collect();
++                .map(|_| zero_out_if_overflow_happened_lut);
 +
 +            // Combine both vectors into a single vector
 +            let mut combined_luts: Vec<_> = cleaned_merged_interesting_remainder_luts
-+                .into_iter()
-+                .chain(new_remainder_luts.into_iter())
++                .chain(new_remainder_luts)
 +                .collect();
 +
 +            combined_luts.push(merge_overflow_flags_lut[pos_in_block]);
@@ -12698,7 +12692,7 @@ index 000000000..95d188513
 +            };
 +
 +            shortint_key
-+                .unchecked_add_assign(&mut quotient.blocks[block_of_bit], &did_not_overflow_flag);
++                .unchecked_add_assign(&mut quotient.blocks[block_of_bit], did_not_overflow_flag);
 +
 +            assert_eq!(
 +                remainder1.blocks[..first_trivial_block].len(),
@@ -12761,12 +12755,12 @@ index 000000000..95d188513
 +    ) -> LookupVector {
 +        let integer_key = &self.key.key;
 +        let shortint_key = &integer_key.key;
-+        let message_modulus = factor.0 as u64;
++        let message_modulus = factor.0;
 +        match message_modulus {
 +            1..4 => {
 +                shortint_key.generate_lookup_vector_bivariate_with_factor(&func, message_modulus)
 +            }
-+            _ => panic!("Unexpected factor value: {:?}", factor),
++            _ => panic!("Unexpected factor value: {factor:?}"),
 +        }
 +    }
 +
@@ -12777,11 +12771,10 @@ index 000000000..95d188513
 +    /// When the divisor is 0:
 +    ///
 +    /// - For unsigned operands, the returned quotient will be the max value (i.e. all bits set to
-+    ///   1),
-+    /// the remainder will have the value of the numerator.
++    ///   1) the remainder will have the value of the numerator.
 +    ///
-+    /// - For signed operands, remainder will have the same value as the numerator, and,
-+    /// if the numerator is < 0, quotient will be -1 else 1
++    /// - For signed operands, remainder will have the same value as the numerator, and, if the
++    ///   numerator is < 0, quotient will be -1 else 1
 +    ///
 +    /// This behaviour should not be relied on.
 +    ///
@@ -13094,10 +13087,10 @@ index 000000000..95d188513
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/ilog2.rs b/tfhe/src/integer/fpga/server_key/radix/ilog2.rs
 new file mode 100644
-index 000000000..11cbacca3
+index 00000000..f8ef9159
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/ilog2.rs
-@@ -0,0 +1,435 @@
+@@ -0,0 +1,432 @@
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::integer::server_key::radix_parallel::ilog2::{BitValue, Direction};
 +use crate::integer::{
@@ -13185,7 +13178,7 @@ index 000000000..11cbacca3
 +        // Trailing bits sum function ensures that each block keeps the number of leading
 +        // zeros or becomes 0 if the preceding block contains a bit set to one
 +        // (leading_zeros != num bits in message)
-+        self.compute_prefix_sum_hillis_steele(blocks, "trailing_bits_sum".to_owned())
++        self.compute_prefix_sum_hillis_steele(blocks, "trailing_bits_sum")
 +    }
 +
 +    fn gen_lut_for_trailing_leading(
@@ -13194,7 +13187,7 @@ index 000000000..11cbacca3
 +        bit_value: BitValue,
 +    ) -> LookupVector {
 +        let shortint_key = &self.key.key.key;
-+        let message_modulus = shortint_key.message_modulus.0 as u64;
++        let message_modulus = shortint_key.message_modulus.0;
 +
 +        let func: Box<dyn Fn(u64) -> u64> = match (direction, bit_value) {
 +            (Direction::Trailing, BitValue::One) => {
@@ -13370,15 +13363,15 @@ index 000000000..11cbacca3
 +
 +        let lut_extract_bitnot_message = {
 +            let func = |x| {
-+                let m: u64 = x % shortint_key.message_modulus.0 as u64; // extract message
-+                (!m) % shortint_key.message_modulus.0 as u64 // bitnot the message
++                let m: u64 = x % shortint_key.message_modulus.0; // extract message
++                (!m) % shortint_key.message_modulus.0 // bitnot the message
 +            };
 +            shortint_key.generate_lookup_vector(&func)
 +        };
 +        let lut_extract_bitnot_carry = {
 +            let func = |x| {
-+                let c: u64 = x / shortint_key.message_modulus.0 as u64; // extract carry
-+                (!c) % shortint_key.message_modulus.0 as u64 // bitnot the carry
++                let c: u64 = x / shortint_key.message_modulus.0; // extract carry
++                (!c) % shortint_key.message_modulus.0 // bitnot the carry
 +            };
 +            shortint_key.generate_lookup_vector(&func)
 +        };
@@ -13393,10 +13386,7 @@ index 000000000..11cbacca3
 +        self.apply_same_lookup_vector_packed_assign(&mut carry_blocks, lut_extract_bitnot_carry);
 +
 +        // Normally this would be 0, but we want the bitnot of 0, which is msg_mod-1
-+        carry_blocks.insert(
-+            0,
-+            integer_key.key.create_trivial((message_modulus - 1) as u64),
-+        );
++        carry_blocks.insert(0, integer_key.key.create_trivial(message_modulus - 1));
 +
 +        let message = SignedRadixCiphertext::from(message_blocks);
 +        let carry = SignedRadixCiphertext::from(carry_blocks);
@@ -13535,7 +13525,7 @@ index 000000000..11cbacca3
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/mod.rs b/tfhe/src/integer/fpga/server_key/radix/mod.rs
 new file mode 100644
-index 000000000..d2ae5cc67
+index 00000000..bac78914
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/mod.rs
 @@ -0,0 +1,174 @@
@@ -13687,8 +13677,8 @@ index 000000000..d2ae5cc67
 +
 +        let lut_padding_block_creator = {
 +            let func = |x| {
-+                let message_modulus = shortint_key.message_modulus.0 as u64;
-+                let x = x % message_modulus as u64;
++                let message_modulus = shortint_key.message_modulus.0;
++                let x = x % message_modulus;
 +                let num_bits_in_block = message_modulus.ilog2();
 +                let x_sign_bit = x >> (num_bits_in_block - 1) & 1;
 +                // padding is a message full of 1 if sign bit is one
@@ -13697,7 +13687,7 @@ index 000000000..d2ae5cc67
 +            };
 +            shortint_key.generate_lookup_vector(&func)
 +        };
-+        self.apply_lookup_vector_packed_assign(&mut blocks, &vec![lut_padding_block_creator]);
++        self.apply_lookup_vector_packed_assign(&mut blocks, &[lut_padding_block_creator]);
 +
 +        let new_len = num_blocks + ct.blocks.len();
 +        ct.blocks.resize(new_len, blocks[0].clone());
@@ -13715,7 +13705,7 @@ index 000000000..d2ae5cc67
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/modulus_switch_compression.rs b/tfhe/src/integer/fpga/server_key/radix/modulus_switch_compression.rs
 new file mode 100644
-index 000000000..ee61f20cc
+index 00000000..ee61f20c
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/modulus_switch_compression.rs
 @@ -0,0 +1,59 @@
@@ -13780,10 +13770,10 @@ index 000000000..ee61f20cc
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/mul.rs b/tfhe/src/integer/fpga/server_key/radix/mul.rs
 new file mode 100644
-index 000000000..e2894804a
+index 00000000..58c35835
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/mul.rs
-@@ -0,0 +1,788 @@
+@@ -0,0 +1,783 @@
 +use log::warn;
 +
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
@@ -14295,20 +14285,18 @@ index 000000000..e2894804a
 +                    })
 +            });
 +
-+        let multiplication_terms: Vec<(Ciphertext, LookupVector, usize)>;
-+
 +        // The modulus defines the number of bits of the message.
 +        // If the modulus is smaller than 2, the carry won't overflow,
 +        // since the message is either 0 or 1.
-+        if message_modulus > 2 {
-+            multiplication_terms = multiplication_iter
++        let multiplication_terms: Vec<_> = if message_modulus > 2 {
++            multiplication_iter
 +                .chain(
 +                    rhs.blocks()[..rhs.blocks().len() - 1]
 +                        .iter()
 +                        .enumerate()
 +                        .filter(|(_, block)| block.degree.get() != 0)
 +                        .flat_map(|(index_rhs, block_rhs)| {
-+                            lhs.blocks()[0..=max_index - index_rhs - 1]
++                            lhs.blocks()[0..(max_index - index_rhs)]
 +                                .iter()
 +                                .enumerate()
 +                                .filter(|(_, block_lhs)| block_lhs.degree.get() != 0)
@@ -14324,21 +14312,19 @@ index 000000000..e2894804a
 +                                })
 +                        }),
 +                )
-+                .collect();
++                .collect()
 +        } else {
-+            multiplication_terms = multiplication_iter.collect();
++            multiplication_iter.collect()
++        };
++
++        for (ct, lut, index) in multiplication_terms {
++            ciphertexts.push(ct);
++            luts.push(lut);
++            block_indexes.push(index);
 +        }
 +
-+        multiplication_terms
-+            .into_iter()
-+            .for_each(|(ct, lut, index)| {
-+                ciphertexts.push(ct);
-+                luts.push(lut);
-+                block_indexes.push(index);
-+            });
-+
 +        let mut to_add =
-+            self.execute_short_int_multiplications(ciphertexts, luts, block_indexes, max_index);
++            self.execute_short_int_multiplications(ciphertexts, &luts, block_indexes, max_index);
 +
 +        self.adder_tree_assign_batched(&mut to_add);
 +
@@ -14348,11 +14334,11 @@ index 000000000..e2894804a
 +            .iter_mut()
 +            .enumerate()
 +            .for_each(|(index, block)| {
-+                *block = result_blocks[index].clone();
++                block.clone_from(&result_blocks[index]);
 +            });
 +    }
 +
-+    fn adder_tree_assign_batched(&self, input_list: &mut Vec<Vec<Ciphertext>>) {
++    fn adder_tree_assign_batched(&self, input_list: &mut [Vec<Ciphertext>]) {
 +        let shortint_key = &self.key.key.key;
 +
 +        let max_additions_per_slot = self.get_additions_to_fill_carry();
@@ -14374,7 +14360,7 @@ index 000000000..e2894804a
 +            current_index = ready_index;
 +
 +            while current_index <= max_index && pbs_slots_open > 0 {
-+                let input_column = &mut input_list[current_index as usize];
++                let input_column = &mut input_list[current_index];
 +
 +                let max_additions = if current_index == max_index {
 +                    pbs_slots_open * max_additions_per_slot
@@ -14402,7 +14388,7 @@ index 000000000..e2894804a
 +                        for _ in 0..slots_filled - 1 {
 +                            let mut res = input_column.pop().unwrap();
 +                            let mut second_res = input_column.pop().unwrap();
-+                            shortint_key.unchecked_add_assign(&mut res, &mut second_res);
++                            shortint_key.unchecked_add_assign(&mut res, &second_res);
 +                            for _ in 0..(max_additions_per_slot - 2) {
 +                                shortint_key
 +                                    .unchecked_add_assign(&mut res, &input_column.pop().unwrap());
@@ -14477,14 +14463,14 @@ index 000000000..e2894804a
 +                })
 +                .collect();
 +
-+            if ciphertext_stack.len() > 0 {
++            if !ciphertext_stack.is_empty() {
 +                self.apply_lookup_vector_packed_assign(&mut ciphertexts, &luts);
 +            }
 +
 +            ciphertext_stack
 +                .iter_mut()
 +                .enumerate()
-+                .for_each(|(index, ct)| ct.0 = ciphertexts[index].clone());
++                .for_each(|(index, ct)| ct.0.clone_from(&ciphertexts[index]));
 +
 +            for _ in 0..ciphertext_stack.len() {
 +                let (ct, index, _) = ciphertext_stack.pop().unwrap();
@@ -14516,7 +14502,7 @@ index 000000000..e2894804a
 +            .filter(|(_, block)| block.degree.get() != 0)
 +            .for_each(|(index, block)| {
 +                let mut block = block.clone();
-+                shortint_key.unchecked_apply_lookup_table_bivariate_assign_prep(&mut block, &ct2);
++                shortint_key.unchecked_apply_lookup_table_bivariate_assign_prep(&mut block, ct2);
 +                let (lut, index) = if index < ct_len {
 +                    (lut_vector_mul_2lsb, index)
 +                } else {
@@ -14532,7 +14518,7 @@ index 000000000..e2894804a
 +
 +        let max_index = 2 * ct_len - 1;
 +        let to_add =
-+            self.execute_short_int_multiplications(ciphertexts, luts, block_indexes, max_index);
++            self.execute_short_int_multiplications(ciphertexts, &luts, block_indexes, max_index);
 +
 +        let mut result_lsb = self.flatten_result(to_add);
 +
@@ -14543,13 +14529,13 @@ index 000000000..e2894804a
 +    fn execute_short_int_multiplications(
 +        &self,
 +        mut ciphertexts: Vec<Ciphertext>,
-+        luts: Vec<LookupVector>,
++        luts: &[LookupVector],
 +        block_indexes: Vec<usize>,
 +        max_index: usize,
 +    ) -> Vec<Vec<Ciphertext>> {
 +        let mut to_add: Vec<Vec<Ciphertext>> = vec![vec![]; max_index + 1];
 +
-+        self.apply_lookup_vector_packed_assign(&mut ciphertexts, &luts);
++        self.apply_lookup_vector_packed_assign(&mut ciphertexts, luts);
 +        for (ct, block_index) in ciphertexts.into_iter().zip(block_indexes) {
 +            to_add[block_index].push(ct);
 +        }
@@ -14561,20 +14547,19 @@ index 000000000..e2894804a
 +        let shortint_key = &self.key.key.key;
 +        result
 +            .into_iter()
-+            .map(|b| {
++            .flat_map(|b| {
 +                if b.is_empty() {
 +                    vec![shortint_key.create_trivial(0)]
 +                } else {
 +                    b
 +                }
 +            })
-+            .flatten()
 +            .collect()
 +    }
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/neg.rs b/tfhe/src/integer/fpga/server_key/radix/neg.rs
 new file mode 100644
-index 000000000..ab4cdf30a
+index 00000000..ab4cdf30
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/neg.rs
 @@ -0,0 +1,101 @@
@@ -14681,7 +14666,7 @@ index 000000000..ab4cdf30a
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/reverse_bits.rs b/tfhe/src/integer/fpga/server_key/radix/reverse_bits.rs
 new file mode 100644
-index 000000000..72745bec5
+index 00000000..72745bec
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/reverse_bits.rs
 @@ -0,0 +1,37 @@
@@ -14724,7 +14709,7 @@ index 000000000..72745bec5
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/rotate.rs b/tfhe/src/integer/fpga/server_key/radix/rotate.rs
 new file mode 100644
-index 000000000..ad77b81bc
+index 00000000..ad77b81b
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/rotate.rs
 @@ -0,0 +1,197 @@
@@ -14927,7 +14912,7 @@ index 000000000..ad77b81bc
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_add.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_add.rs
 new file mode 100644
-index 000000000..d6d3c196a
+index 00000000..d6d3c196
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_add.rs
 @@ -0,0 +1,160 @@
@@ -15093,7 +15078,7 @@ index 000000000..d6d3c196a
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_bitwise_op.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_bitwise_op.rs
 new file mode 100644
-index 000000000..5b64243b3
+index 00000000..c40512fd
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_bitwise_op.rs
 @@ -0,0 +1,437 @@
@@ -15145,7 +15130,7 @@ index 000000000..5b64243b3
 +                let lut_scalar_bit_and = if clear_block < 4 {
 +                    shortint_key.generate_lookup_vector(&|x| x & (clear_block as u64))
 +                } else {
-+                    panic!("Unexpected clear_block value: {}", clear_block)
++                    panic!("Unexpected clear_block value: {clear_block}")
 +                };
 +
 +                blocks_vec.push(lhs_block);
@@ -15154,7 +15139,7 @@ index 000000000..5b64243b3
 +
 +        self.apply_lookup_vector_mut_packed_assign(&mut blocks_vec, &luts);
 +
-+        self.update_degrees(lhs, new_degrees);
++        Self::update_degrees(lhs, new_degrees);
 +
 +        let num_clear_blocks = clear_blocks.len();
 +        if num_clear_blocks < lhs.blocks().len() {
@@ -15288,7 +15273,7 @@ index 000000000..5b64243b3
 +                let lut_scalar_bit_or = if clear_block < 4 {
 +                    shortint_key.generate_lookup_vector(&|x| x | clear_block)
 +                } else {
-+                    panic!("Unexpected clear_block value: {}", clear_block)
++                    panic!("Unexpected clear_block value: {clear_block}")
 +                };
 +
 +                blocks_vec.push(lhs_block);
@@ -15297,7 +15282,7 @@ index 000000000..5b64243b3
 +
 +        self.apply_lookup_vector_mut_packed_assign(&mut blocks_vec, &luts);
 +
-+        self.update_degrees(lhs, new_degrees);
++        Self::update_degrees(lhs, new_degrees);
 +
 +        // Blocks beyond clear_blocks.len() should be 'ored'
 +        // with '0', which means they keep their value
@@ -15425,7 +15410,7 @@ index 000000000..5b64243b3
 +                let lut_scalar_bit_xor = if clear_block < 4 {
 +                    shortint_key.generate_lookup_vector(&|x| x ^ clear_block)
 +                } else {
-+                    panic!("Unexpected clear_block value: {}", clear_block)
++                    panic!("Unexpected clear_block value: {clear_block}")
 +                };
 +
 +                blocks_vec.push(lhs_block);
@@ -15434,7 +15419,7 @@ index 000000000..5b64243b3
 +
 +        self.apply_lookup_vector_mut_packed_assign(&mut blocks_vec, &luts);
 +
-+        self.update_degrees(lhs, new_degrees);
++        Self::update_degrees(lhs, new_degrees);
 +
 +        // Blocks beyond clear_blocks.len() should be 'xored'
 +        // with '0', which means they keep their value
@@ -15525,10 +15510,10 @@ index 000000000..5b64243b3
 +        self.unchecked_scalar_bitxor_assign(lhs, rhs);
 +    }
 +
-+    fn update_degrees<T: IntegerRadixCiphertext>(&self, lhs: &mut T, new_degrees: Vec<Degree>) {
++    fn update_degrees<T: IntegerRadixCiphertext>(lhs: &mut T, new_degrees: Vec<Degree>) {
 +        lhs.blocks_mut()
 +            .iter_mut()
-+            .zip(new_degrees.into_iter())
++            .zip(new_degrees)
 +            .for_each(|(lhs_block, new_degree)| {
 +                lhs_block.degree = new_degree;
 +            });
@@ -15536,10 +15521,10 @@ index 000000000..5b64243b3
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_comparison.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_comparison.rs
 new file mode 100644
-index 000000000..9d1ccbbed
+index 00000000..29f2ffd9
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_comparison.rs
-@@ -0,0 +1,673 @@
+@@ -0,0 +1,659 @@
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
 +use crate::integer::fpga::server_key::comparator::Comparator;
@@ -15578,30 +15563,25 @@ index 000000000..9d1ccbbed
 +        while block_comparisons.len() > 1 {
 +            // Since all blocks encrypt either 0 or 1, we can sum max_value of them
 +            // as in the worst case we will be adding `max_value` ones
-+            let sums_and_luts: Vec<(Ciphertext, LookupVector)> = block_comparisons
-+                .chunks(max_sum_size)
-+                .map(|blocks| {
-+                    let mut sum = blocks[0].clone();
-+                    for other_block in &blocks[1..] {
-+                        shortint_key.unchecked_add_assign(&mut sum, other_block);
-+                    }
++            let sums_and_luts = block_comparisons.chunks(max_sum_size).map(|blocks| {
++                let mut sum = blocks[0].clone();
++                for other_block in &blocks[1..] {
++                    shortint_key.unchecked_add_assign(&mut sum, other_block);
++                }
 +
-+                    let lut_is_equal_to = {
-+                        let len_block = blocks.len() as u64;
-+                        let func = if len_block < 16 {
-+                            |x| u64::from((x & 15 as u64) == len_block)
-+                        } else {
-+                            panic!("Unexpected blocks.len() value: {}", blocks.len())
-+                        };
-+                        shortint_key.generate_lookup_vector(&func)
++                let lut_is_equal_to = {
++                    let len_block = blocks.len() as u64;
++                    let func = if len_block < 16 {
++                        |x| u64::from((x & 15_u64) == len_block)
++                    } else {
++                        panic!("Unexpected blocks.len() value: {}", blocks.len())
 +                    };
++                    shortint_key.generate_lookup_vector(&func)
++                };
++                (sum, lut_is_equal_to)
++            });
 +
-+                    (sum, lut_is_equal_to)
-+                })
-+                .collect::<Vec<_>>();
-+
-+            let (mut sums, luts): (Vec<Ciphertext>, Vec<LookupVector>) =
-+                sums_and_luts.into_iter().unzip();
++            let (mut sums, luts): (Vec<Ciphertext>, Vec<LookupVector>) = sums_and_luts.unzip();
 +
 +            self.apply_lookup_vector_packed_assign(&mut sums, &luts);
 +
@@ -15704,16 +15684,14 @@ index 000000000..9d1ccbbed
 +            if matches!(comparison_type, ZeroComparisonType::Equality) {
 +                let func_is_mod_equal_to_zero = |x| {
 +                    u64::from(
-+                        x % (shortint_key.message_modulus.0 * shortint_key.carry_modulus.0) as u64
-+                            == 0,
++                        x % (shortint_key.message_modulus.0 * shortint_key.carry_modulus.0) == 0,
 +                    )
 +                };
 +                shortint_key.generate_lookup_vector(&func_is_mod_equal_to_zero)
 +            } else {
 +                let func_is_mod_not_equal_to_zero = |x| {
 +                    u64::from(
-+                        x % (shortint_key.message_modulus.0 * shortint_key.carry_modulus.0) as u64
-+                            != 0,
++                        x % (shortint_key.message_modulus.0 * shortint_key.carry_modulus.0) != 0,
 +                    )
 +                };
 +                shortint_key.generate_lookup_vector(&func_is_mod_not_equal_to_zero)
@@ -15743,13 +15721,12 @@ index 000000000..9d1ccbbed
 +    /// where for each index, the vec contains either
 +    /// - `None` if fhe scalar was not present in the slice,
 +    /// - or `Some` lookuptable that allows to compare a shortint block to the scalar value at this
-+    ///  index
++    ///   index
 +    ///
 +    ///
 +    ///  E.g.
 +    ///  - input slice: [0, 2],
-+    ///  - total_modulus: 4,
-+    ///  returns -> [Some(LUT(|x| x == 0)), None, Some(LUT(|x| x == 2), None]
++    ///  - total_modulus: 4, returns -> [Some(LUT(|x| x == 0)), None, Some(LUT(|x| x == 2), None]
 +    fn create_scalar_comparison_luts(
 +        &self,
 +        scalar_blocks: &[u8],
@@ -15767,9 +15744,9 @@ index 000000000..9d1ccbbed
 +                EqualitySelector::Eq => {
 +                    let lut_is_equal_to = {
 +                        let func = if scalar_block < 16 {
-+                            |x| u64::from((x & 15 as u64) == scalar_block as u64)
++                            |x| u64::from((x & 15_u64) == scalar_block as u64)
 +                        } else {
-+                            panic!("Unexpected scalar_block value: {}", scalar_block)
++                            panic!("Unexpected scalar_block value: {scalar_block}")
 +                        };
 +                        shortint_key.generate_lookup_vector(&func)
 +                    };
@@ -15779,9 +15756,9 @@ index 000000000..9d1ccbbed
 +                EqualitySelector::Ne => {
 +                    let lut_is_not_equal_to = {
 +                        let func = if scalar_block < 16 {
-+                            |x| u64::from((x & 15 as u64) != scalar_block as u64)
++                            |x| u64::from((x & 15_u64) != scalar_block as u64)
 +                        } else {
-+                            panic!("Unexpected scalar_block value: {}", scalar_block)
++                            panic!("Unexpected scalar_block value: {scalar_block}")
 +                        };
 +                        shortint_key.generate_lookup_vector(&func)
 +                    };
@@ -15892,10 +15869,7 @@ index 000000000..9d1ccbbed
 +        let (mut cmp_1, mut cmp_2) = {
 +            let mut packed_blocks: Vec<Ciphertext> = least_significant_blocks
 +                .chunks(2)
-+                .map(|two_blocks| {
-+                    let packed_block = integer_key.pack_block_chunk(two_blocks);
-+                    packed_block
-+                })
++                .map(|two_blocks| integer_key.pack_block_chunk(two_blocks))
 +                .collect();
 +
 +            self.apply_lookup_vector_packed_assign(&mut packed_blocks, &scalar_comp_luts);
@@ -15982,10 +15956,7 @@ index 000000000..9d1ccbbed
 +        let (mut cmp_1, mut cmp_2) = {
 +            let mut packed_blocks: Vec<Ciphertext> = least_significant_blocks
 +                .chunks(2)
-+                .map(|two_blocks| {
-+                    let packed_block = integer_key.pack_block_chunk(two_blocks);
-+                    packed_block
-+                })
++                .map(|two_blocks| integer_key.pack_block_chunk(two_blocks))
 +                .collect();
 +
 +            self.apply_lookup_vector_packed_assign(&mut packed_blocks, &scalar_comp_luts);
@@ -16215,7 +16186,7 @@ index 000000000..9d1ccbbed
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_div_mod.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_div_mod.rs
 new file mode 100644
-index 000000000..60103fd5d
+index 00000000..60103fd5
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_div_mod.rs
 @@ -0,0 +1,392 @@
@@ -16613,10 +16584,10 @@ index 000000000..60103fd5d
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_mul.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_mul.rs
 new file mode 100644
-index 000000000..86f79f1ac
+index 00000000..6731af14
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_mul.rs
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,213 @@
 +use crate::integer::block_decomposition::{BlockDecomposer, DecomposableInto};
 +use crate::integer::ciphertext::IntegerRadixCiphertext;
 +use crate::integer::server_key::ScalarMultiplier;
@@ -16679,7 +16650,6 @@ index 000000000..86f79f1ac
 +        // The idea is that with these we can create all other shift that are in
 +        // range (0..total_bits) for free (block rotation)
 +        let preshifted_lhs = (0..msg_bits)
-+            .into_iter()
 +            .map(|shift_amount| {
 +                if has_at_least_one_set[shift_amount] {
 +                    self.unchecked_scalar_left_shift(lhs, shift_amount)
@@ -16833,10 +16803,10 @@ index 000000000..86f79f1ac
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_rotate.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_rotate.rs
 new file mode 100644
-index 000000000..f4cb21a4c
+index 00000000..39fce74c
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_rotate.rs
-@@ -0,0 +1,662 @@
+@@ -0,0 +1,660 @@
 +use crate::core_crypto::prelude::CastFrom;
 +use crate::integer::ciphertext::IntegerRadixCiphertext;
 +use crate::BelfortServerKey;
@@ -17128,7 +17098,6 @@ index 000000000..f4cb21a4c
 +        }
 +
 +        let mut new_blocks = (0..num_blocks)
-+            .into_iter()
 +            .map(|index| {
 +                // rotate_right means moving bits from MSB to LSB
 +                // Since our blocks are from LSB to MSB, bits move from
@@ -17149,7 +17118,7 @@ index 000000000..f4cb21a4c
 +            let func = |current_block, mut next_block| {
 +                // left shift so as not to lose
 +                // bits when shifting right afterwards
-+                let message_modulus = shortint_key.message_modulus.0 as u64;
++                let message_modulus = shortint_key.message_modulus.0;
 +                let num_bits_in_block = message_modulus.ilog2() as u64;
 +                let shift_within_block = 1;
 +
@@ -17458,7 +17427,6 @@ index 000000000..f4cb21a4c
 +        }
 +
 +        let mut new_blocks = (0..num_blocks)
-+            .into_iter()
 +            .map(|index| {
 +                // Since our blocks are from LSB to MSB, bits move from
 +                // block `index - 1` to `index`
@@ -17480,7 +17448,7 @@ index 000000000..f4cb21a4c
 +
 +        let lut_create_blocks_swb1 = {
 +            let func = |previous_block, current_block| {
-+                let message_modulus = shortint_key.message_modulus.0 as u64;
++                let message_modulus = shortint_key.message_modulus.0;
 +                let shift_within_block = 1;
 +
 +                let current_block = current_block << shift_within_block;
@@ -17501,10 +17469,10 @@ index 000000000..f4cb21a4c
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_shift.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_shift.rs
 new file mode 100644
-index 000000000..1da93bab6
+index 00000000..26fea086
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_shift.rs
-@@ -0,0 +1,753 @@
+@@ -0,0 +1,750 @@
 +use crate::core_crypto::commons::utils::izip;
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::core_crypto::prelude::CastFrom;
@@ -17682,7 +17650,6 @@ index 000000000..1da93bab6
 +
 +            let lut_last_block = if shift_within_block < 2 {
 +                let func_last_block_sw = |x| {
-+                    let message_modulus = message_modulus as u64;
 +                    let num_bits_in_block = message_modulus.ilog2() as u64;
 +
 +                    let x = x % message_modulus;
@@ -17698,12 +17665,11 @@ index 000000000..1da93bab6
 +                };
 +                shortint_key.generate_lookup_vector(&func_last_block_sw)
 +            } else {
-+                panic!("Unexpected shift value: {:?}", shift_within_block)
++                panic!("Unexpected shift value: {shift_within_block:?}")
 +            };
 +
 +            let lut_pad_block_creator = {
 +                let func = |x| {
-+                    let message_modulus = message_modulus as u64;
 +                    let num_bits_in_block = message_modulus.ilog2() as u64;
 +
 +                    let x = x % message_modulus;
@@ -17839,7 +17805,7 @@ index 000000000..1da93bab6
 +        let integer_key = &self.key.key;
 +        let shortint_key = &integer_key.key;
 +
-+        let message_modulus = integer_key.message_modulus().0 as u64;
++        let message_modulus = integer_key.message_modulus().0;
 +        let num_bits_in_block = message_modulus.ilog2() as u64;
 +
 +        assert!(shift_within_block < num_bits_in_block);
@@ -17867,7 +17833,7 @@ index 000000000..1da93bab6
 +
 +            shortint_key.generate_lookup_vector_bivariate(&func_with_fixed_shift)
 +        } else {
-+            panic!("Unexpected shift value: {:?}", shift_within_block)
++            panic!("Unexpected shift value: {shift_within_block:?}")
 +        };
 +
 +        let mut inner_blocks_vec = inner_blocks
@@ -18130,7 +18096,6 @@ index 000000000..1da93bab6
 +
 +        let lut_create_blocks_swb1 = {
 +            let func = |previous_block, current_block| {
-+                let message_modulus = message_modulus as u64;
 +                let shift_within_block = 1;
 +
 +                let current_block = current_block << shift_within_block;
@@ -18145,7 +18110,7 @@ index 000000000..1da93bab6
 +
 +        let lut_shift1_mod = {
 +            let func = |x| {
-+                let modulus = message_modulus as u64;
++                let modulus = message_modulus;
 +                (x << 1) % modulus
 +            };
 +            shortint_key.generate_lookup_vector(&func)
@@ -18260,7 +18225,7 @@ index 000000000..1da93bab6
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/scalar_sub.rs b/tfhe/src/integer/fpga/server_key/radix/scalar_sub.rs
 new file mode 100644
-index 000000000..ea16fb0c3
+index 00000000..ea16fb0c
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/scalar_sub.rs
 @@ -0,0 +1,124 @@
@@ -18390,7 +18355,7 @@ index 000000000..ea16fb0c3
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/shift.rs b/tfhe/src/integer/fpga/server_key/radix/shift.rs
 new file mode 100644
-index 000000000..678e0d3bd
+index 00000000..57349aea
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/shift.rs
 @@ -0,0 +1,398 @@
@@ -18747,7 +18712,7 @@ index 000000000..678e0d3bd
 +                    let previous_bit = (x & 2) >> 1;
 +                    let current_bit = x & 1;
 +
-+                    if control_bit == (1 as u64) {
++                    if control_bit == 1_u64 {
 +                        previous_bit
 +                    } else {
 +                        current_bit
@@ -18794,7 +18759,7 @@ index 000000000..678e0d3bd
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/slice.rs b/tfhe/src/integer/fpga/server_key/radix/slice.rs
 new file mode 100644
-index 000000000..4f1a9e1b6
+index 00000000..4f1a9e1b
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/slice.rs
 @@ -0,0 +1,278 @@
@@ -19078,10 +19043,10 @@ index 000000000..4f1a9e1b6
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/sub.rs b/tfhe/src/integer/fpga/server_key/radix/sub.rs
 new file mode 100644
-index 000000000..862584855
+index 00000000..60e2b2c7
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/sub.rs
-@@ -0,0 +1,315 @@
+@@ -0,0 +1,313 @@
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::integer::ciphertext::IntegerRadixCiphertext;
 +use crate::integer::fpga::server_key::{BelfortServerKey, OutputCarry};
@@ -19315,14 +19280,14 @@ index 000000000..862584855
 +            });
 +
 +        let lut_message_extract = self.lut_message_extract();
-+        let mut blocks = ct.blocks.to_vec();
++        let mut blocks = ct.blocks.clone();
 +        self.apply_same_lookup_vector_packed_assign(&mut blocks, lut_message_extract);
 +
 +        ct.blocks
 +            .par_iter_mut()
 +            .zip(blocks.par_iter())
 +            .for_each(|(block, vec_block)| {
-+                *block = vec_block.clone();
++                block.clone_from(vec_block);
 +            });
 +
 +        assert!(ct.block_carries_are_empty());
@@ -19339,7 +19304,7 @@ index 000000000..862584855
 +
 +        let lut_does_block_generate_borrow = {
 +            let func = |x| {
-+                if x < (shortint_key.message_modulus.0 as u64) {
++                if x < shortint_key.message_modulus.0 {
 +                    OutputCarry::Generated as u64
 +                } else {
 +                    OutputCarry::None as u64
@@ -19348,7 +19313,7 @@ index 000000000..862584855
 +            shortint_key.generate_lookup_vector(&func)
 +        };
 +        let lut_does_block_generate_or_propagate_borrow = {
-+            let func = |x: u64| match x.cmp(&(shortint_key.message_modulus.0 as u64)) {
++            let func = |x: u64| match x.cmp(&{ shortint_key.message_modulus.0 }) {
 +                Ordering::Less => OutputCarry::Generated as u64,
 +                Ordering::Equal => OutputCarry::Propagated as u64,
 +                Ordering::Greater => OutputCarry::None as u64,
@@ -19371,7 +19336,7 @@ index 000000000..862584855
 +            })
 +            .collect_into_vec(&mut luts);
 +
-+        let mut generates_or_propagates = sum_ct.blocks.to_vec();
++        let mut generates_or_propagates = sum_ct.blocks.clone();
 +
 +        self.apply_lookup_vector_packed_assign(&mut generates_or_propagates, &luts);
 +
@@ -19383,10 +19348,8 @@ index 000000000..862584855
 +        generates_or_propagates: Vec<Ciphertext>,
 +    ) -> (Vec<Ciphertext>, Ciphertext) {
 +        let num_blocks = generates_or_propagates.len();
-+        let mut borrows_out = self.compute_prefix_sum_hillis_steele(
-+            generates_or_propagates,
-+            "carry_propagation_sum".to_owned(),
-+        );
++        let mut borrows_out =
++            self.compute_prefix_sum_hillis_steele(generates_or_propagates, "carry_propagation_sum");
 +
 +        let shortint_key = &self.key.key.key;
 +        let mut last_block_out_borrow = shortint_key.create_trivial(0);
@@ -19399,7 +19362,7 @@ index 000000000..862584855
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/sum.rs b/tfhe/src/integer/fpga/server_key/radix/sum.rs
 new file mode 100644
-index 000000000..b1a724812
+index 00000000..c8787bbd
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/sum.rs
 @@ -0,0 +1,315 @@
@@ -19418,7 +19381,7 @@ index 000000000..b1a724812
 +    where
 +        T: IntegerRadixCiphertext,
 +    {
-+        self.validate_input(&terms);
++        Self::validate_input(&terms);
 +
 +        // Handle edge cases
 +        match terms.len() {
@@ -19561,7 +19524,7 @@ index 000000000..b1a724812
 +        Some(T::from_blocks(blocks))
 +    }
 +
-+    fn validate_input<T: IntegerRadixCiphertext>(&self, terms: &[T]) {
++    fn validate_input<T: IntegerRadixCiphertext>(terms: &[T]) {
 +        if terms.len() > 1 {
 +            let num_blocks = terms[0].blocks().len();
 +            assert!(
@@ -19620,9 +19583,9 @@ index 000000000..b1a724812
 +            .map(Clone::clone)
 +            .collect::<Vec<T>>();
 +
-+        ciphertexts.iter_mut().for_each(|ct| {
++        for ct in ciphertexts.iter_mut() {
 +            self.conditional_full_propagate(&mut *ct);
-+        });
++        }
 +
 +        self.unchecked_sum_ciphertexts_vec(ciphertexts)
 +    }
@@ -19720,10 +19683,10 @@ index 000000000..b1a724812
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/mod.rs b/tfhe/src/integer/fpga/server_key/radix/tests/mod.rs
 new file mode 100644
-index 000000000..48f73aee4
+index 00000000..fdfe1dc3
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/mod.rs
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,141 @@
 +use std::sync::Arc;
 +
 +use crate::integer::server_key::radix_parallel::tests_cases_unsigned::FunctionExecutor;
@@ -19799,6 +19762,13 @@ index 000000000..48f73aee4
 +        fpga_key.connect();
 +    }
 +
++    pub(crate) fn setup_single_fpga(&mut self, server_key: Arc<ServerKey>) {
++        self.disconnect();
++        self.fks = Some(BelfortServerKey::from(server_key));
++        let fpga_key = self.fks.as_mut().unwrap();
++        fpga_key.connect_to(vec![0]);
++    }
++
 +    fn disconnect(&mut self) {
 +        if let Some(fpga_key) = self.fks.as_mut() {
 +            fpga_key.disconnect();
@@ -19860,7 +19830,7 @@ index 000000000..48f73aee4
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_add.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_add.rs
 new file mode 100644
-index 000000000..43ea97807
+index 00000000..43ea9780
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_add.rs
 @@ -0,0 +1,34 @@
@@ -19900,7 +19870,7 @@ index 000000000..43ea97807
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_bitwise_op.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_bitwise_op.rs
 new file mode 100644
-index 000000000..a7ea33c39
+index 00000000..a7ea33c3
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_bitwise_op.rs
 @@ -0,0 +1,104 @@
@@ -20010,7 +19980,7 @@ index 000000000..a7ea33c39
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_comparison.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_comparison.rs
 new file mode 100644
-index 000000000..87a7e7d3b
+index 00000000..87a7e7d3
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_comparison.rs
 @@ -0,0 +1,114 @@
@@ -20130,7 +20100,7 @@ index 000000000..87a7e7d3b
 +define_comparison_test_functions!(ge, u8);
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_div_mod.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_div_mod.rs
 new file mode 100644
-index 000000000..628ae53bc
+index 00000000..628ae53b
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_div_mod.rs
 @@ -0,0 +1,62 @@
@@ -20198,7 +20168,7 @@ index 000000000..628ae53bc
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_ilog2.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_ilog2.rs
 new file mode 100644
-index 000000000..fe66f05a1
+index 00000000..fe66f05a
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_ilog2.rs
 @@ -0,0 +1,56 @@
@@ -20260,7 +20230,7 @@ index 000000000..fe66f05a1
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_mul.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_mul.rs
 new file mode 100644
-index 000000000..40cc23097
+index 00000000..40cc2309
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_mul.rs
 @@ -0,0 +1,147 @@
@@ -20413,7 +20383,7 @@ index 000000000..40cc23097
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_neg.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_neg.rs
 new file mode 100644
-index 000000000..68257bb91
+index 00000000..68257bb9
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_neg.rs
 @@ -0,0 +1,28 @@
@@ -20447,19 +20417,28 @@ index 000000000..68257bb91
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_propagate.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_propagate.rs
 new file mode 100644
-index 000000000..3f6a7ce44
+index 00000000..408b2e19
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_propagate.rs
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,69 @@
 +use crate::integer::fpga::server_key::radix::tests::{
 +    create_test_default_params, FpgaFunctionExecutor,
 +};
 +use crate::integer::fpga::BelfortServerKey;
 +
-+use crate::integer::server_key::radix_parallel::tests_cases_unsigned::full_propagate_test;
++use crate::integer::keycache::KEY_CACHE;
++use crate::integer::server_key::radix_parallel::tests_cases_unsigned::{
++    full_propagate_test, FunctionExecutor,
++};
++use crate::integer::{IntegerCiphertext, IntegerKeyKind, RadixCiphertext, RadixClientKey};
++use rand::Rng;
++use std::sync::Arc;
++use std::u128;
++
 +use crate::shortint::parameters::*;
 +
 +create_test_default_params!(integer_full_propagate);
++create_test_default_params!(integer_single_fpga_propagate);
 +
 +fn integer_full_propagate<P>(param: P)
 +where
@@ -20468,9 +20447,52 @@ index 000000000..3f6a7ce44
 +    let executor = FpgaFunctionExecutor::new(&BelfortServerKey::full_propagate);
 +    full_propagate_test(param, executor);
 +}
++
++fn integer_single_fpga_propagate<P>(param: P)
++where
++    P: Into<PBSParameters>,
++{
++    let executor = FpgaFunctionExecutor::new(&BelfortServerKey::full_propagate);
++    single_fpga_propagate_with_first_block_clean_test(param, executor);
++}
++
++fn single_fpga_propagate_with_first_block_clean_test<P, F>(
++    param: P,
++    mut executor: FpgaFunctionExecutor<F>,
++) where
++    P: Into<PBSParameters>,
++    F: Fn(&BelfortServerKey, &mut RadixCiphertext) -> (),
++{
++    let (cks, sks) = KEY_CACHE.get_from_params(param, IntegerKeyKind::Radix);
++    let sks = Arc::new(sks);
++
++    let nb_ctxt =
++        (128f64 / (cks.parameters().message_modulus().0 as f64).log2().ceil()).ceil() as usize;
++
++    let cks: RadixClientKey = RadixClientKey::from((cks, nb_ctxt));
++
++    executor.setup_single_fpga(sks.clone());
++
++    let mut rng = rand::thread_rng();
++
++    let clear = rng.gen::<u128>();
++    // Ensure first block doesn't have carries
++    let clear_2 = rng.gen::<u128>() << 2;
++
++    let mut ct = cks.encrypt(clear);
++    let ct_2 = cks.encrypt(clear_2);
++
++    ct = sks.unchecked_add(&ct, &ct_2);
++    ct.blocks_mut()[0].degree = Degree::new(0);
++
++    executor.execute(&mut ct);
++    let clear_res = clear.wrapping_add(clear_2);
++    let dec_res = cks.decrypt::<u128>(&ct);
++    assert!(clear_res == dec_res, "Calculated results are the same!");
++}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_rotate.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_rotate.rs
 new file mode 100644
-index 000000000..3713436f8
+index 00000000..3713436f
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_rotate.rs
 @@ -0,0 +1,47 @@
@@ -20523,7 +20545,7 @@ index 000000000..3713436f8
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_add.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_add.rs
 new file mode 100644
-index 000000000..d9dfc1151
+index 00000000..d9dfc115
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_add.rs
 @@ -0,0 +1,38 @@
@@ -20567,7 +20589,7 @@ index 000000000..d9dfc1151
 +// }
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_bitwise_op.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_bitwise_op.rs
 new file mode 100644
-index 000000000..95a67555f
+index 00000000..95a67555
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_bitwise_op.rs
 @@ -0,0 +1,37 @@
@@ -20610,7 +20632,7 @@ index 000000000..95a67555f
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_comparison.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_comparison.rs
 new file mode 100644
-index 000000000..a9d94e8c2
+index 00000000..a9d94e8c
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_comparison.rs
 @@ -0,0 +1,108 @@
@@ -20724,7 +20746,7 @@ index 000000000..a9d94e8c2
 +define_scalar_comparison_test_functions!(ge, U256);
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_div_mod.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_div_mod.rs
 new file mode 100644
-index 000000000..f3c993f34
+index 00000000..f3c993f3
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_div_mod.rs
 @@ -0,0 +1,17 @@
@@ -20747,7 +20769,7 @@ index 000000000..f3c993f34
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_mul.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_mul.rs
 new file mode 100644
-index 000000000..c325a54fb
+index 00000000..c325a54f
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_mul.rs
 @@ -0,0 +1,56 @@
@@ -20809,7 +20831,7 @@ index 000000000..c325a54fb
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_rotate.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_rotate.rs
 new file mode 100644
-index 000000000..1536911a4
+index 00000000..1536911a
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_rotate.rs
 @@ -0,0 +1,47 @@
@@ -20862,7 +20884,7 @@ index 000000000..1536911a4
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_shift.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_shift.rs
 new file mode 100644
-index 000000000..c6bb7dac5
+index 00000000..c6bb7dac
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_shift.rs
 @@ -0,0 +1,47 @@
@@ -20915,7 +20937,7 @@ index 000000000..c6bb7dac5
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_sub.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_sub.rs
 new file mode 100644
-index 000000000..70417f394
+index 00000000..70417f39
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_sub.rs
 @@ -0,0 +1,37 @@
@@ -20958,7 +20980,7 @@ index 000000000..70417f394
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_shift.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_shift.rs
 new file mode 100644
-index 000000000..22e339b96
+index 00000000..22e339b9
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_shift.rs
 @@ -0,0 +1,47 @@
@@ -21011,7 +21033,7 @@ index 000000000..22e339b96
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_sub.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_sub.rs
 new file mode 100644
-index 000000000..44455fe25
+index 00000000..44455fe2
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_sub.rs
 @@ -0,0 +1,46 @@
@@ -21063,7 +21085,7 @@ index 000000000..44455fe25
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/tests/test_sum.rs b/tfhe/src/integer/fpga/server_key/radix/tests/test_sum.rs
 new file mode 100644
-index 000000000..d445ad927
+index 00000000..d445ad92
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/tests/test_sum.rs
 @@ -0,0 +1,56 @@
@@ -21125,7 +21147,7 @@ index 000000000..d445ad927
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/vector_comparisons.rs b/tfhe/src/integer/fpga/server_key/radix/vector_comparisons.rs
 new file mode 100644
-index 000000000..081a1af40
+index 00000000..081a1af4
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/vector_comparisons.rs
 @@ -0,0 +1,103 @@
@@ -21234,7 +21256,7 @@ index 000000000..081a1af40
 +}
 diff --git a/tfhe/src/integer/fpga/server_key/radix/vector_find.rs b/tfhe/src/integer/fpga/server_key/radix/vector_find.rs
 new file mode 100644
-index 000000000..aa6d3d51a
+index 00000000..aa6d3d51
 --- /dev/null
 +++ b/tfhe/src/integer/fpga/server_key/radix/vector_find.rs
 @@ -0,0 +1,720 @@
@@ -21959,7 +21981,7 @@ index 000000000..aa6d3d51a
 +    }
 +}
 diff --git a/tfhe/src/integer/mod.rs b/tfhe/src/integer/mod.rs
-index 9fcd4cd57..fa509b39f 100755
+index 9fcd4cd5..fa509b39 100755
 --- a/tfhe/src/integer/mod.rs
 +++ b/tfhe/src/integer/mod.rs
 @@ -66,8 +66,6 @@ pub mod parameters;
@@ -21982,7 +22004,7 @@ index 9fcd4cd57..fa509b39f 100755
  pub use bigint::i512::I512;
  pub use bigint::u256::U256;
 diff --git a/tfhe/src/integer/server_key/comparator.rs b/tfhe/src/integer/server_key/comparator.rs
-index c68ce4193..17e98b476 100644
+index c68ce419..17e98b47 100644
 --- a/tfhe/src/integer/server_key/comparator.rs
 +++ b/tfhe/src/integer/server_key/comparator.rs
 @@ -16,7 +16,7 @@ pub(crate) enum ZeroComparisonType {
@@ -21995,7 +22017,7 @@ index c68ce4193..17e98b476 100644
      Min,
  }
 diff --git a/tfhe/src/integer/server_key/radix_parallel/count_zeros_ones.rs b/tfhe/src/integer/server_key/radix_parallel/count_zeros_ones.rs
-index 828e6d709..e34f8f318 100644
+index 828e6d70..e34f8f31 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/count_zeros_ones.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/count_zeros_ones.rs
 @@ -5,7 +5,7 @@ use crate::shortint::ciphertext::Degree;
@@ -22043,7 +22065,7 @@ index 828e6d709..e34f8f318 100644
          T: IntegerRadixCiphertext,
      {
 diff --git a/tfhe/src/integer/server_key/radix_parallel/mod.rs b/tfhe/src/integer/server_key/radix_parallel/mod.rs
-index b2e6f8585..0d67f8a5c 100644
+index b2e6f858..0d67f8a5 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/mod.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/mod.rs
 @@ -4,7 +4,7 @@ mod bit_extractor;
@@ -22065,7 +22087,7 @@ index b2e6f8585..0d67f8a5c 100644
  mod reverse_bits;
  mod slice;
 diff --git a/tfhe/src/integer/server_key/radix_parallel/modulus_switch_compression.rs b/tfhe/src/integer/server_key/radix_parallel/modulus_switch_compression.rs
-index 9bd218ccc..707b29478 100644
+index 9bd218cc..707b2947 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/modulus_switch_compression.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/modulus_switch_compression.rs
 @@ -57,7 +57,7 @@ impl ServerKey {
@@ -22087,7 +22109,7 @@ index 9bd218ccc..707b29478 100644
          compressed_ct: &CompressedModulusSwitchedRadixCiphertextGeneric,
      ) -> Vec<Ciphertext> {
 diff --git a/tfhe/src/integer/server_key/radix_parallel/mul.rs b/tfhe/src/integer/server_key/radix_parallel/mul.rs
-index 72a934e1f..e18508650 100644
+index 72a934e1..e1850865 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/mul.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/mul.rs
 @@ -300,7 +300,7 @@ impl ServerKey {
@@ -22100,7 +22122,7 @@ index 72a934e1f..e18508650 100644
          result_lsb: &mut T,
          result_msb: &mut T,
 diff --git a/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/mod.rs b/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/mod.rs
-index 1cdf22d7f..816b43527 100644
+index 1cdf22d7..816b4352 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/mod.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/mod.rs
 @@ -53,7 +53,7 @@ pub(crate) const fn nb_unchecked_tests_for_params(params: PBSParameters) -> usiz
@@ -22214,7 +22236,7 @@ index 1cdf22d7f..816b43527 100644
  
  /// For unary operations
 diff --git a/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/test_sum.rs b/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/test_sum.rs
-index efac6dc09..08b7e0364 100644
+index efac6dc0..08b7e036 100644
 --- a/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/test_sum.rs
 +++ b/tfhe/src/integer/server_key/radix_parallel/tests_unsigned/test_sum.rs
 @@ -4,7 +4,7 @@ use crate::integer::server_key::radix_parallel::tests_unsigned::{
@@ -22326,7 +22348,7 @@ index efac6dc09..08b7e0364 100644
  
 diff --git a/tfhe/src/integer/wopbs/mod.rs b/tfhe/src/integer/wopbs/mod.rs
 deleted file mode 100644
-index 40a620bd2..000000000
+index 40a620bd..00000000
 --- a/tfhe/src/integer/wopbs/mod.rs
 +++ /dev/null
 @@ -1,1182 +0,0 @@
@@ -23514,7 +23536,7 @@ index 40a620bd2..000000000
 -}
 diff --git a/tfhe/src/integer/wopbs/test.rs b/tfhe/src/integer/wopbs/test.rs
 deleted file mode 100644
-index 4c6d17506..000000000
+index 4c6d1750..00000000
 --- a/tfhe/src/integer/wopbs/test.rs
 +++ /dev/null
 @@ -1,292 +0,0 @@
@@ -23811,7 +23833,7 @@ index 4c6d17506..000000000
 -    assert_eq!(ck.decrypt::<u64>(&lut_at_0), 5);
 -}
 diff --git a/tfhe/src/shortint/client_key/mod.rs b/tfhe/src/shortint/client_key/mod.rs
-index 26d9aca04..cbcdca848 100644
+index 26d9aca0..cbcdca84 100644
 --- a/tfhe/src/shortint/client_key/mod.rs
 +++ b/tfhe/src/shortint/client_key/mod.rs
 @@ -541,7 +541,7 @@ impl ClientKey {
@@ -23824,17 +23846,17 @@ index 26d9aca04..cbcdca848 100644
              PBSOrder::KeyswitchBootstrap => self.large_lwe_secret_key(),
              PBSOrder::BootstrapKeyswitch => self.small_lwe_secret_key(),
 diff --git a/tfhe/src/shortint/engine/mod.rs b/tfhe/src/shortint/engine/mod.rs
-index 8986d85bc..e7c617a8a 100644
+index 8986d85b..a413de63 100644
 --- a/tfhe/src/shortint/engine/mod.rs
 +++ b/tfhe/src/shortint/engine/mod.rs
-@@ -158,6 +158,64 @@ where
+@@ -158,6 +158,63 @@ where
      max_value
  }
  
 +pub(crate) fn fill_accumulator_vector<C>(
 +    accumulator: &mut GlweCiphertext<C>,
 +    server_key: &ServerKey,
-+    vector: &Vec<u64>,
++    vector: &[u64],
 +) -> u64
 +where
 +    C: ContainerMut<Element = u64>,
@@ -23861,7 +23883,7 @@ index 8986d85bc..e7c617a8a 100644
 +    let box_size = server_key.bootstrapping_key.polynomial_size().0 / modulus_sup;
 +
 +    // Value of the shift we multiply our messages by
-+    let delta = (1_u64 << 63) / (server_key.message_modulus.0 * server_key.carry_modulus.0) as u64;
++    let delta = (1_u64 << 63) / (server_key.message_modulus.0 * server_key.carry_modulus.0);
 +
 +    let mut body = accumulator_view.get_mut_body();
 +    let accumulator_u64 = body.as_mut();
@@ -23869,9 +23891,8 @@ index 8986d85bc..e7c617a8a 100644
 +    // Tracking the max value of the function to define the degree later
 +    let mut max_value = 0;
 +
-+    for i in 0..modulus_sup {
++    for (i, &f_eval) in vector.iter().enumerate() {
 +        let index = i * box_size;
-+        let f_eval = vector[i as usize];
 +        max_value = max_value.max(f_eval);
 +        accumulator_u64[index..index + box_size].fill(f_eval * delta);
 +    }
@@ -23892,7 +23913,7 @@ index 8986d85bc..e7c617a8a 100644
  pub(crate) fn fill_accumulator_no_encoding<F, C>(
      accumulator: &mut GlweCiphertext<C>,
      server_key: &ServerKey,
-@@ -317,6 +375,17 @@ pub struct ShortintEngine {
+@@ -317,6 +374,17 @@ pub struct ShortintEngine {
  }
  
  impl ShortintEngine {
@@ -23912,10 +23933,10 @@ index 8986d85bc..e7c617a8a 100644
      #[inline]
 diff --git a/tfhe/src/shortint/fpga.rs b/tfhe/src/shortint/fpga.rs
 new file mode 100644
-index 000000000..015598fc4
+index 00000000..a50b284e
 --- /dev/null
 +++ b/tfhe/src/shortint/fpga.rs
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,166 @@
 +use crate::core_crypto::fpga::lookup_vector::LookupVector;
 +use crate::core_crypto::prelude::GlweCiphertext;
 +use crate::shortint::ciphertext::Degree;
@@ -23934,7 +23955,7 @@ index 000000000..015598fc4
 +        let message_modulus = self.message_modulus;
 +        let carry_modulus = self.carry_modulus;
 +
-+        let modulus = (message_modulus.0 * carry_modulus.0) as u64;
++        let modulus = message_modulus.0 * carry_modulus.0;
 +
 +        let mut max_value = 0;
 +
@@ -23946,7 +23967,7 @@ index 000000000..015598fc4
 +            })
 +            .collect();
 +
-+        LookupVector::new_with_max(vector, max_value)
++        LookupVector::new_with_max(&vector, max_value)
 +    }
 +
 +    pub fn generate_lookup_vector_bivariate_with_factor<F>(
@@ -23960,21 +23981,21 @@ index 000000000..015598fc4
 +        let message_modulus = self.message_modulus;
 +        let carry_modulus = self.carry_modulus;
 +
-+        let modulus = (message_modulus.0 * carry_modulus.0) as u64;
++        let modulus = message_modulus.0 * carry_modulus.0;
 +
 +        let mut max_value = 0;
 +
 +        let vector: Vec<u64> = (0..modulus)
 +            .map(|val| {
-+                let lhs = (val / factor) % (message_modulus.0 as u64);
-+                let rhs = (val % factor) % (message_modulus.0 as u64);
++                let lhs = (val / factor) % message_modulus.0;
++                let rhs = (val % factor) % message_modulus.0;
 +                let value = func(lhs, rhs) % modulus;
 +                max_value = max_value.max(value);
 +                value
 +            })
 +            .collect();
 +
-+        LookupVector::new_with_max(vector, max_value)
++        LookupVector::new_with_max(&vector, max_value)
 +    }
 +
 +    pub fn generate_lookup_vector_bivariate<F>(&self, func: &F) -> LookupVector
@@ -23983,10 +24004,10 @@ index 000000000..015598fc4
 +    {
 +        let message_modulus = self.message_modulus;
 +
-+        self.generate_lookup_vector_bivariate_with_factor(func, message_modulus.0 as u64)
++        self.generate_lookup_vector_bivariate_with_factor(func, message_modulus.0)
 +    }
 +
-+    pub fn generate_lookup_table_from_vector(&self, vector: &Vec<u64>) -> LookupTableOwned {
++    pub fn generate_lookup_table_from_vector(&self, vector: &[u64]) -> LookupTableOwned {
 +        let mut acc = GlweCiphertext::new(
 +            0,
 +            self.bootstrapping_key.glwe_size(),
@@ -24038,8 +24059,8 @@ index 000000000..015598fc4
 +        ct_right: &Ciphertext,
 +    ) {
 +        let max_modulus = self.message_modulus.0;
-+        let modulus = (ct_right.degree.get() + 1) as u64;
-+        assert!(modulus <= max_modulus as u64);
++        let modulus = ct_right.degree.get() + 1;
++        assert!(modulus <= max_modulus);
 +
 +        self.unchecked_scalar_mul_assign(ct_left, max_modulus as u8);
 +
@@ -24052,30 +24073,10 @@ index 000000000..015598fc4
 +    // Implemented on shortint server_key, executed CPU. These versions are
 +    // alternatives to the same functions available over BelfortServerKey
 +    // offering hardware acceleration.
-+
-+    pub fn apply_lookup_vector_packed(
-+        &self,
-+        cts: Vec<&Ciphertext>,
-+        luts: &Vec<LookupVector>,
-+    ) -> Vec<Ciphertext> {
-+        let mut ct_ress: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
-+
-+        match self.pbs_order {
-+            PBSOrder::KeyswitchBootstrap => {
-+                self.keyswitch_programmable_bootstrap_assign_packed(&mut ct_ress, &luts);
-+            }
-+            PBSOrder::BootstrapKeyswitch => {
-+                panic!("Packed BootstrapKeyswitch is not supported")
-+            }
-+        };
-+
-+        ct_ress
-+    }
-+
 +    pub fn apply_lookup_vector_packed_assign(
 +        &self,
 +        cts: &mut Vec<Ciphertext>,
-+        luts: &Vec<LookupVector>,
++        luts: &[LookupVector],
 +    ) {
 +        match self.pbs_order {
 +            PBSOrder::KeyswitchBootstrap => {
@@ -24090,7 +24091,7 @@ index 000000000..015598fc4
 +    pub(crate) fn keyswitch_programmable_bootstrap_assign_packed(
 +        &self,
 +        cts: &mut Vec<Ciphertext>,
-+        luts: &Vec<LookupVector>,
++        luts: &[LookupVector],
 +    ) {
 +        use rayon::prelude::*;
 +
@@ -24103,7 +24104,7 @@ index 000000000..015598fc4
 +    }
 +}
 diff --git a/tfhe/src/shortint/mod.rs b/tfhe/src/shortint/mod.rs
-index 38e066513..f870f6566 100755
+index 38e06651..f870f656 100755
 --- a/tfhe/src/shortint/mod.rs
 +++ b/tfhe/src/shortint/mod.rs
 @@ -51,6 +51,7 @@ pub mod backward_compatibility;
@@ -24115,7 +24116,7 @@ index 38e066513..f870f6566 100755
  #[cfg(any(test, doctest, feature = "internal-keycache"))]
  pub mod keycache;
 diff --git a/tfhe/src/shortint/server_key/mod.rs b/tfhe/src/shortint/server_key/mod.rs
-index 0fc59daeb..b2bde9535 100644
+index 0fc59dae..b2bde953 100644
 --- a/tfhe/src/shortint/server_key/mod.rs
 +++ b/tfhe/src/shortint/server_key/mod.rs
 @@ -1201,7 +1201,7 @@ impl ServerKey {
@@ -24202,7 +24203,7 @@ index 0fc59daeb..b2bde9535 100644
          &self,
          ct: &Ciphertext,
 diff --git a/tfhe/web_wasm_parallel_tests/worker.js b/tfhe/web_wasm_parallel_tests/worker.js
-index 4090e73b2..bc3ff3a56 100644
+index 4090e73b..bc3ff3a5 100644
 --- a/tfhe/web_wasm_parallel_tests/worker.js
 +++ b/tfhe/web_wasm_parallel_tests/worker.js
 @@ -16,6 +16,7 @@ import init, {

@@ -19,12 +19,6 @@ git apply $REPO_DIR/belfort.patch
 git add .
 git commit -m "Belfort Release"
 
-
 make install_rs_check_toolchain
 make install_rs_build_toolchain
 popd
-
-
-# Program FPGA through .bashrc alias
-fpga-setup
-
