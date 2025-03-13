@@ -16,8 +16,8 @@ git checkout tags/$TFHERS_TAG -b $TFHERS_TAG
 git apply $REPO_DIR/belfort.patch
 
 # Cleanup git history
-git add .
-git commit -m "Belfort Release"
+# git add .
+# git commit -m "Belfort Release"
 popd
 
 ################################################################################
