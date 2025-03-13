@@ -38,13 +38,13 @@ ssh -J <username>@ssh.esat.kuleuven.be <username>@flipflop.esat.kuleuven.be
 
 2. Get a copy of this repo.
 
-Clone:You might need to set your ssh-keys for being able to clone.
+*Clone* - You might need to set your ssh-keys for being able to clone:
 
 ```bash
 git clone --branch flipflop git@github.com:belfort-labs/hello-fpga.git
 ```
 
-Or, `scp` your existing clone (clean!) to it
+*SCP* - If you have a local clone, you can `scp` it to `flipflop`:
 
 ```bash
 scp -r -J <username>@ssh.esat.kuleuven.be ./ <username>@flipflop.esat.kuleuven.be:~/hello-fpga
