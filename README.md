@@ -13,7 +13,7 @@ diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpg
 **Change of only 3 lines of code:**
 
 ```Rust
-/// Create Keys                                                  // Create Keys
+// Create Keys                                                  // Create Keys
 
 let config = ConfigBuilder::default().build();                  let config = ConfigBuilder::default().build();
 let client_key = ClientKey::generate(config);                   let client_key = ClientKey::generate(config);
