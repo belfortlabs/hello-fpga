@@ -6,11 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tfhe = { path = "../tfhe-rs/tfhe", features = [
-    "boolean",
+tfhe = { path = "../../tfhe-rs/tfhe", features = [
     "shortint",
     "integer",
-    "x86_64-unix",
     "experimental-force_fft_algo_dif4"
 ] }
 rand = "0.8.5"
