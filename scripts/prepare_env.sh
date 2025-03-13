@@ -15,6 +15,10 @@ pushd $TFHERS_DIR
 git checkout tags/$TFHERS_TAG -b $TFHERS_TAG
 git apply $REPO_DIR/belfort.patch
 
+# Cleanup git history
+git add .
+git commit -m "Belfort Release"
+
 
 make install_rs_check_toolchain
 make install_rs_build_toolchain
