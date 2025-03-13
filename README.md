@@ -59,6 +59,7 @@ cd hello-fpga && source ./scripts/prepare_env.sh
 4. Set up the execution environment, which will make FPGAs discoverable to TFHE-rs
 
 ```bash
+source ./scripts/source_env.sh
 source /tools/source_tools
 ```
 
