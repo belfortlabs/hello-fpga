@@ -50,7 +50,7 @@ git clone --branch flipflop git@github.com:belfortlabs/hello-fpga.git
 scp -r -J <username>@ssh.esat.kuleuven.be ./ <username>@flipflop.esat.kuleuven.be:~/hello-fpga
 ```
 
-3. Source `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
+3. Run `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
 
 ```bash
 cd hello-fpga && ./scripts/prepare_env.sh
