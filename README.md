@@ -60,13 +60,19 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 scp -i <id.pem> -r . ubuntu@<instance_public_dns>:~/.
 ```
 
-3. Source `prepare_env.sh` for setting up the execution environment; cloning `TFHE-rs`, patching it with the Belfort extensions, programming the FPGA images, ...
+3. Run `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
 
 ```bash
-cd hello-fpga && source ./scripts/prepare_env.sh
+cd hello-fpga && ./scripts/prepare_env.sh
 ```
 
-4. You are ready to go
+4. Setup execution environment with `fpga-setup` command. This is an alias on `~/.bashrc` for programming FPGAs and making them discoverable to TFHE-rs. Do not forget running this command for every new terminal session, if you will run an FPGA accelerated app in it.
+
+```bash
+fpga-setup
+```
+
+5. You are ready to go
 
 ### Run the example applications
 
@@ -82,6 +88,7 @@ cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features f
 
 ### Caveats
 
+- We provide `fpga-reset` command for resetting the FPGAs in case it would be needed. For example, if you kill your app with `Ctrl+C` while it is interacting with FPGA, you may leave the FPGA in a bad-state. It might be preferable to perform a reset in such cases.
 - Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
 - Enabling the logger gives you runtime warnings if a software function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
