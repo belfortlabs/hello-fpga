@@ -10,11 +10,13 @@ You can find a weighted-sum example in this repo for both CPU and FPGA execution
 diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpga.rs
 ```
 
-**Change of only 3 lines of code:**
+**Change 5 lines of code:**
 
-```Rust
-/// Create Keys                                                  // Create Keys
+```Rust   
+/// Import dependencies                                         // Import dependencies
+                                                          |     use tfhe::integer::fpga::BelfortServerKey;
 
+/// Create Keys                                                 // Create Keys
 let config = ConfigBuilder::default().build();                  let config = ConfigBuilder::default().build();
 let client_key = ClientKey::generate(config);                   let client_key = ClientKey::generate(config);
 let server_key = client_key.generate_server_key();              let server_key = client_key.generate_server_key();
@@ -23,7 +25,31 @@ let server_key = client_key.generate_server_key();              let server_key =
                                                           |     fpga_key.connect();
 set_server_key(server_key);                               |     set_server_key(fpga_key.clone());
 
-// Encrypt Values                                               // Encrypt Values
+// Compute on encrypted data                                    // Compute on encrypted data
+
+                                                                // Disconnect from FPGA
+                                                                fpga_key.disconnect();
+```
+
+**Update your `Cargo.toml`:**
+
+1. Change the `tfhe` dependency to use your local fpga-enabled `tfhe-rs` repo:
+
+```Cargo.toml
+[dependencies]
+tfhe = { path = "../../tfhe-rs/tfhe", features = [
+    "shortint",
+    "integer",
+    "experimental-force_fft_algo_dif4",
+] }
+```
+
+2. Add the `fpga` feature to your application's `Cargo.toml`:
+
+```Cargo.toml
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
 ```
 
 ## How to run the demo?
@@ -32,7 +58,7 @@ set_server_key(server_key);                               |     set_server_key(f
 
 :exclamation: A new AWS account may not have the required quota allowance to launch F2 type instances. In this case, file a [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 24 vCPU cores**, as `f2.6xlarge` requires 24 vCPUs. The quota increase may take up to a few days to process.
 
-In your communication to AWS, please pay attention that the F2 access permissions are tied to a given region. Though we provide the demo application in this repository, the actual FPGA image is hosted by AWS. We make that image publicly available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`. If more regions with F2 instances appear in future, we will make the image available in those regions too. If you notice that we are late to do this, you can create an issue.
+In your communication to AWS, please pay attention that the F2 access permissions are tied to a given region. **The FPGA image is publicly available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**. If more regions with F2 instances appear in future, we will make the image available in those regions too. If you notice that we are late to do this, you can create an issue.
 
 ### Get access permissions
 
@@ -54,11 +80,7 @@ Launch an AWS EC2 F2 instance.
 ssh -i <id.pem> ubuntu@<instance_public_dns>
 ```
 
-2. Clone this repo into your AWS instance, or `scp` your existing clone (clean!) to it
-
-```bash
-scp -i <id.pem> -r . ubuntu@<instance_public_dns>:~/.
-```
+2. Clone this repo into your AWS instance
 
 3. Run `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
 
@@ -84,6 +106,17 @@ cargo run --release --package hello-fpga --bin weighted-sum-on-cpu
 
 ```bash
 cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features fpga
+```
+
+### Specify the number of FPGA cores
+
+If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
+This can be useful for development purposes or distributing access of the resources to multiple users. 
+
+```Rust
+let mut fpga_key = BelfortServerKey::from(&server_key);
+fpga_key.connect_to(4); // Specifies connection to 4 FPGA cores
+set_server_key(fpga_key);
 ```
 
 ### Caveats
