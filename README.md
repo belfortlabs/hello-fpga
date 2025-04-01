@@ -2,56 +2,6 @@
 
 :warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on AWS. While the full acceleration capabilities are limited by AWS FPGAs' restrictions, this early access version enables users to verify the Belfort FPGA integration.
 
-## What FPGA acceleration requires?
-
-You can find a weighted-sum example in this repo for both CPU and FPGA execution. Use `diff` to see how minimal the changes are for FPGA acceleration.
-
-```bash
-diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpga.rs
-```
-
-**Change 5 lines of code:**
-
-```Rust   
-/// Import dependencies                                         // Import dependencies
-                                                          |     use tfhe::integer::fpga::BelfortServerKey;
-
-/// Create Keys                                                 // Create Keys
-let config = ConfigBuilder::default().build();                  let config = ConfigBuilder::default().build();
-let client_key = ClientKey::generate(config);                   let client_key = ClientKey::generate(config);
-let server_key = client_key.generate_server_key();              let server_key = client_key.generate_server_key();
-
-                                                          |     let mut fpga_key = BelfortServerKey::from(&server_key);
-                                                          |     fpga_key.connect();
-set_server_key(server_key);                               |     set_server_key(fpga_key.clone());
-
-// Compute on encrypted data                                    // Compute on encrypted data
-
-                                                                // Disconnect from FPGA
-                                                                fpga_key.disconnect();
-```
-
-**Update your `Cargo.toml`:**
-
-1. Change the `tfhe` dependency to use your local fpga-enabled `tfhe-rs` repo:
-
-```Cargo.toml
-[dependencies]
-tfhe = { path = "../../tfhe-rs/tfhe", features = [
-    "shortint",
-    "integer",
-    "experimental-force_fft_algo_dif4",
-] }
-```
-
-2. Add the `fpga` feature to your application's `Cargo.toml`:
-
-```Cargo.toml
-[features]
-fpga = ["tfhe/fpga"]
-emulate_fpga = ["tfhe/emulate_fpga"]
-```
-
 ## How to run the demo?
 
 ### Setup your AWS Account
@@ -88,14 +38,6 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 cd hello-fpga && ./scripts/prepare_env.sh
 ```
 
-4. Setup execution environment with `fpga-setup` command. This is an alias on `~/.bashrc` for programming FPGAs and making them discoverable to TFHE-rs. Do not forget running this command for every new terminal session, if you will run an FPGA accelerated app in it.
-
-```bash
-fpga-setup
-```
-
-5. You are ready to go
-
 ### Run the example applications
 
 You can run both CPU and FPGA version of the application and compare the execution time differences;
@@ -106,6 +48,56 @@ cargo run --release --package hello-fpga --bin weighted-sum-on-cpu
 
 ```bash
 cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features fpga
+```
+
+## What does FPGA acceleration require?
+
+You can find a weighted-sum example in this repo for both CPU and FPGA execution. Use `diff` to see how minimal the changes are for FPGA acceleration.
+
+```bash
+diff -y hello-fpga/src/weighted_sum_on_cpu.rs hello-fpga/src/weighted_sum_on_fpga.rs
+```
+
+**Change 5 lines of code:**
+
+```Rust   
+/// Import dependencies                                         // Import dependencies
+                                                          |     use tfhe::integer::fpga::BelfortServerKey;
+
+/// Create Keys                                                 // Create Keys
+let config = ConfigBuilder::default().build();                  let config = ConfigBuilder::default().build();
+let client_key = ClientKey::generate(config);                   let client_key = ClientKey::generate(config);
+let server_key = client_key.generate_server_key();              let server_key = client_key.generate_server_key();
+
+                                                          |     let mut fpga_key = BelfortServerKey::from(&server_key);
+                                                          |     fpga_key.connect();
+set_server_key(server_key);                               |     set_server_key(fpga_key.clone());
+
+// Compute on encrypted data                                    // Compute on encrypted data
+
+                                                                // Disconnect from FPGA
+                                                          |     fpga_key.disconnect();
+```
+
+**Update your `Cargo.toml`:**
+
+1. Change the `tfhe` dependency to use your local fpga-enabled `tfhe-rs` repo:
+
+```Cargo.toml
+[dependencies]
+tfhe = { path = "../../tfhe-rs/tfhe", features = [
+    "shortint",
+    "integer",
+    "experimental-force_fft_algo_dif4",
+] }
+```
+
+2. Add the `fpga` feature to your application's `Cargo.toml`:
+
+```Cargo.toml
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
 ```
 
 ### Specify the number of FPGA cores
@@ -121,7 +113,13 @@ set_server_key(fpga_key);
 
 ### Caveats
 
-- We provide `fpga-reset` command for resetting the FPGAs in case it would be needed. For example, if you kill your app with `Ctrl+C` while it is interacting with FPGA, you may leave the FPGA in a bad-state. It might be preferable to perform a reset in such cases.
+
+- Additional commands are available to interact with the FPGA's:
+  - `fpga-program`: programs the fpga's with our FPGA image released on AWS.
+                    This command is only required if the FPGA's have been reset.
+  - `fpga-reset`:   Resets the fpga images. This is useful if you kill your app with `Ctrl+C` while it interacts with the FPGAs,
+                    and the FPGAs are left in a bad state.
+- **In case you run your programs without the fpga's programmed, you will get segmentation faults.**
 - Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
 - Enabling the logger gives you runtime warnings if a software function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
