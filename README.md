@@ -2,7 +2,7 @@
 
 This repo provides a weighted-sum demo application implemented on TFHE-rs, and enables FPGA acceleration on it.
 
-The following teaser shows the simple steps to enable Belfort FPGA acceleration of your THFE-rs code:
+The following teaser shows the simple code changes (`Cargo.toml` changes follow later) to enable Belfort FPGA acceleration of your THFE-rs code:
 
 ```Rust
 // Import the Belfort dependency
