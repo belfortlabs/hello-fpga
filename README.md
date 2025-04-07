@@ -121,6 +121,8 @@ fpga = ["tfhe/fpga"]
 emulate_fpga = ["tfhe/emulate_fpga"]
 ```
 
+These are the only changes to your code to enable FPGA acceleration.
+
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
