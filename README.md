@@ -28,7 +28,7 @@ set_server_key(fpga_key.clone());
 
 AWS accounts do not have access to F2 instances by default. You need to file [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 24 vCPU cores**, as `f2.6xlarge` requires 24 vCPUs. The quota increase may take up to a few days to process.
 
-In your communication to AWS, please pay attention that the F2 access permissions are tied to a region. **The FPGA image is publicly available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**.
+In your communication to AWS, please pay attention that the F2 access permissions are tied to a region. **The FPGA image is available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**.
 
 ### Get access permissions
 
@@ -77,7 +77,7 @@ cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features f
 
 ## How to migrate your code for FPGA acceleration?
 
-You can find a weighted-sum example in this repo for both CPU and FPGA execution.
+The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find a weighted-sum example with the code differences for both CPU and FPGA execution below.
 
 **Change 5 lines of code:**
 
