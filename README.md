@@ -146,3 +146,11 @@ set_server_key(fpga_key);
 - Enabling the logger gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
+
+### License
+
+This software is distributed under the **BSD 3-Clause** license. Read [this](LICENSE) for more details.
+
+Please note this patch targets the `TFHE-rs` project, which is licensed under the BSD 3-Clause Clear License, which includes an explicit statement that no patent rights are granted.
+
+Users of the patched software should be aware that the resulting combination includes code under both licenses.
