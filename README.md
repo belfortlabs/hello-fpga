@@ -39,7 +39,7 @@ For running the demo, you need access permissions to the Belfort AMI and FPGA ac
 Launch an AWS EC2 F2 instance.
 
 - Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
-- AMI: Belfort FPGA Acceleration AMI - `ami-012d786b8acdd9c72`.
+- AMI: Belfort FPGA Acceleration AMI on `eu-west-2` - `ami-07a0e7a348656b66d`.
   - This AMI is prepared by Belfort, free of charge, and ready-to-use, based on Ubuntu 24.04 LTS.
 
 Pick the instance type depending on how much FPGA acceleration you want;
@@ -146,3 +146,9 @@ set_server_key(fpga_key);
 - Enabling the logger gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
+
+### License
+
+Belfort's AMI is free to use only for development, research, prototyping, and experimentation purposes. However, for any commercial use of Belfort's AMI, companies must purchase Belfort’s commercial AMI license.
+
+This software is distributed under the **BSD 3-Clause Clear** license. Read [the license](LICENSE) for more details.
