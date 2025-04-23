@@ -151,4 +151,4 @@ set_server_key(fpga_key);
 
 Belfort's AMI is free to use only for development, research, prototyping, and experimentation purposes. However, for any commercial use of Belfort's AMI, companies must purchase Belfort’s commercial AMI license.
 
-This software is distributed under the **BSD 3-Clause** license. Read [the license](LICENSE) for more details.
+This software is distributed under the **BSD 3-Clause Clear** license. Read [the license](LICENSE) for more details.
