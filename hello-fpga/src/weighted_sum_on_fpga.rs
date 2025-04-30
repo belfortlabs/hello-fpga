@@ -1,5 +1,6 @@
 use rand::Rng;
 use std::time::Instant;
+// Enable FPGA: Import the BelfortServerKey
 use tfhe::integer::fpga::BelfortServerKey;
 use tfhe::prelude::*;
 use tfhe::set_server_key;
@@ -22,17 +23,16 @@ fn main() {
     let weighted_sum = value1 * weight1 + value2 * weight2 + value3 * weight3;
 
     // Create Keys
-
     let config = ConfigBuilder::default().build();
     let client_key = ClientKey::generate(config);
     let server_key = client_key.generate_server_key();
 
+    // Enable FPGA: Create FPGA key from your server and connect to it
     let mut fpga_key = BelfortServerKey::from(&server_key);
     fpga_key.connect();
     set_server_key(fpga_key.clone());
 
     // Encrypt Values
-
     let encrypt_value_weight = |v, w| {
         (
             FheUint64::encrypt(v, &client_key),
@@ -52,10 +52,11 @@ fn main() {
         + encrypted_value2 * encrypted_weight2
         + encrypted_value3 * encrypted_weight3;
 
-    println!("Execution time {:?}", time_start.elapsed());
+    println!("Execution time on FPGA: {:?}", time_start.elapsed());
 
     let decrypted_weighted_sum: u64 = encypted_weighted_sum.decrypt(&client_key);
     assert_eq!(decrypted_weighted_sum, weighted_sum);
 
+    // Enable FPGA: Disconnect the BelfortServerKey
     fpga_key.disconnect();
 }
