@@ -1,4 +1,4 @@
-# BELFORT FPGA Acceleration
+# BELFORT FHE Accelerator
 
 This repo provides a weighted-sum demo application implemented on TFHE-rs, and enables FPGA acceleration on it.
 
