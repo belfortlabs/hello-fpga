@@ -30,17 +30,14 @@ AWS accounts do not have access to F2 instances by default. You need to file [qu
 
 In your communication to AWS, please pay attention that the F2 access permissions are tied to a region. **The FPGA image is available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**.
 
-### Get access permissions
-
-For running the demo, you need access permissions to the Belfort AMI and FPGA accelerator. To receive access, you can send us a message with your AWS ID on [belfortlabs.com](https://belfortlabs.com/), create an issue on GitHub, or [post/dm on X](https://x.com/belfortlabs).
-
 ### Launch an F2 instance
 
-Launch an AWS EC2 F2 instance.
+Launch an AWS EC2 F2 instance based on our public Amazon Machine Image (AMI).
 
+- AMI: [Belfort FPGA Acceleration AMI](https://aws.amazon.com/marketplace/pp/prodview-imfiyzy7svjgu) on the AWS Marketplace.
+  - This AMI by Belfort is ready-to-use.
+  - It's free of charge, but AWS EC2 fees apply
 - Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
-- AMI: Belfort FPGA Acceleration AMI on `eu-west-2` - `ami-07a0e7a348656b66d`.
-  - This AMI is prepared by Belfort, free of charge, and ready-to-use, based on Ubuntu 24.04 LTS.
 
 Pick the instance type depending on how much FPGA acceleration you want;
   - `f2.6xlarge` for 1 FPGA (requires access to 24 vCPUs)
