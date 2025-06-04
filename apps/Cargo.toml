@@ -11,10 +11,10 @@ tfhe = { path = "../../tfhe-rs/tfhe", features = [
     "integer",
     "experimental-force_fft_algo_dif4"
 ] }
-rand = "0.8.5"
-rand_chacha = "0.3.1"
-itertools = "0.11.0"
-proc-macro2 = "=1.0.79"
+rand = "0.9.1"
+rand_chacha = "0.9.0"
+itertools = "0.14.0"
+proc-macro2 = "=1.0.95"
 chrono = "0.4"
 env_logger = "0.11.5"
 
@@ -23,10 +23,5 @@ fpga = ["tfhe/fpga"]
 emulate_fpga = ["tfhe/emulate_fpga"]
 
 [[bin]]
-name = "weighted-sum-on-cpu"
-path = "src/weighted_sum_on_cpu.rs"
-
-[[bin]]
-name = "weighted-sum-on-fpga"
-path = "src/weighted_sum_on_fpga.rs"
-required-features = ["fpga"]
+name = "weighted-sum"
+path = "weighted_sum/main.rs"
