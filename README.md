@@ -65,11 +65,11 @@ cd hello-fpga && ./scripts/prepare_env.sh
 You can run both CPU and FPGA version of the application and compare the execution time differences;
 
 ```bash
-cargo run --release --package hello-fpga --bin weighted-sum-on-cpu
+cargo run --release --package hello-fpga --bin weighted-sum
 ```
 
 ```bash
-cargo run --release --package hello-fpga --bin weighted-sum-on-fpga --features fpga
+cargo run --release --package hello-fpga --bin weighted-sum --features fpga
 ```
 
 ## How to migrate your code for FPGA acceleration?
