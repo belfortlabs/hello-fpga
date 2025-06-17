@@ -1,6 +1,6 @@
 # BELFORT FHE Accelerator
 
-This repo provides a weighted-sum demo application implemented on TFHE-rs, and enables FPGA acceleration on it.
+This repo provides demo applications implemented on TFHE-rs, and enables FPGA acceleration on it.
 
 Check out the [How to migrate your code for FPGA acceleration?](#how-to-migrate-your-code-for-fpga-acceleration) section below to migrate your application. The following steps enable Belfort FPGA acceleration of your THFE-rs code:
 
@@ -60,16 +60,16 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 cd hello-fpga && ./scripts/prepare_env.sh
 ```
 
-### Run the example applications
+### Run the example application
 
 You can run both CPU and FPGA version of the application and compare the execution time differences;
 
 ```bash
-cargo run --release --package hello-fpga --bin weighted-sum
+cargo run --release --package example --bin weighted-sum
 ```
 
 ```bash
-cargo run --release --package hello-fpga --bin weighted-sum --features fpga
+cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
 ## How to migrate your code for FPGA acceleration?
@@ -119,6 +119,22 @@ emulate_fpga = ["tfhe/emulate_fpga"]
 ```
 
 These are the only changes to your code to enable FPGA acceleration.
+
+### Other demos
+
+This repository also contains more comprehensive demo applications. Below you can find the applications and the related commands. They should be run from the root repository and expects and [initialized environment](#prepare-execution-environment).
+
+#### Trivium
+
+[The Trivium demo](/apps/trivium/README.md) contains the transciphering of triviuminto FHE. Below you can find its execution command:
+
+```bash
+# With FPGA acceleration
+cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
+
+# Without FPGA acceleration
+cargo run --release --package tfhe-trivium --bin demo-shortint
+```
 
 ### Specify FPGA cores
 
