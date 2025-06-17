@@ -25,3 +25,11 @@ emulate_fpga = ["tfhe/emulate_fpga"]
 [[bin]]
 name = "weighted-sum"
 path = "weighted_sum/main.rs"
+
+[[bin]]
+name = "trivium-byte"
+path = "trivium/src/demo/demo_byte.rs"
+
+[[bin]]
+name = "trivium-shortint"
+path = "trivium/src/demo/demo_shortint.rs"

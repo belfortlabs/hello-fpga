@@ -1,0 +1,30 @@
+[package]
+name = "tfhe-trivium"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rayon = "1"
+tfhe = { path = "../../../tfhe-rs/tfhe", features = ["boolean", "shortint", "integer", "fpga"] }
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[profile.devo]
+inherits = "dev"
+opt-level = 3
+lto = "off"
+debug-assertions = false
+
+[features]
+fpga = ["tfhe/fpga"]
+
+[[bin]]
+name = "demo-byte"
+path = "src/demo/demo_byte.rs"
+
+[[bin]]
+name = "demo-shortint"
+path = "src/demo/demo_shortint.rs"
