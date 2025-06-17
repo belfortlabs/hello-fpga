@@ -1,22 +1,15 @@
 [package]
-name = "hello-fpga"
+name = "example"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tfhe = { path = "../../tfhe-rs/tfhe", features = [
-    "shortint",
-    "integer",
-    "experimental-force_fft_algo_dif4"
-] }
+tfhe = { workspace = true }
+env_logger = "0.11.5"
 rand = "0.9.1"
 rand_chacha = "0.9.0"
-itertools = "0.14.0"
-proc-macro2 = "=1.0.95"
-chrono = "0.4"
-env_logger = "0.11.5"
 
 [features]
 fpga = ["tfhe/fpga"]
@@ -24,4 +17,4 @@ emulate_fpga = ["tfhe/emulate_fpga"]
 
 [[bin]]
 name = "weighted-sum"
-path = "weighted_sum/main.rs"
+path = "src/main.rs"
