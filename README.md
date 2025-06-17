@@ -22,7 +22,7 @@ set_server_key(fpga_key.clone());
 
 :warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on AWS.
 
-## How to run the demo?
+## How to run a demo?
 
 ### Setup your AWS Account
 
@@ -60,7 +60,7 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 cd hello-fpga && ./scripts/prepare_env.sh
 ```
 
-### Run the example application
+### Run the weighted-sum tutorial
 
 You can run both CPU and FPGA version of the application and compare the execution time differences;
 
@@ -126,7 +126,7 @@ This repository also contains more comprehensive demo applications. Below you ca
 
 #### Trivium
 
-[The Trivium demo](/apps/trivium/README.md) contains the transciphering of triviuminto FHE. Below you can find its execution command:
+[The Trivium demo](/demos/trivium/README.md) contains the transciphering of trivium into FHE. Below you can find its execution command:
 
 ```bash
 # With FPGA acceleration
