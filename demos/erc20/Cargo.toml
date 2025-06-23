@@ -1,0 +1,16 @@
+[package]
+name = "tfhe-erc20"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# tfhe = { workspace = true, features = ["fpga"]}
+crossterm = "0.27"
+rand = "0.8"
+
+# [features]
+# fpga = ["tfhe/fpga"]
+
+[[bin]]
+name = "demo"
+path = "src/main.rs"
