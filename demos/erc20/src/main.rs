@@ -8,6 +8,13 @@ use crossterm::{
 use rand::Rng;
 use std::io::{stdout, Write};
 use std::time;
+use std::time::Instant;
+
+// Enable FPGA: Import the BelfortServerKey
+use tfhe::integer::fpga::BelfortServerKey;
+use tfhe::prelude::*;
+use tfhe::set_server_key;
+use tfhe::{ClientKey, ConfigBuilder, FheUint64};
 
 const RECT_WIDTH: u16 = 15;
 const RECT_HEIGHT: u16 = 5;
@@ -24,6 +31,16 @@ enum ExecutionType {
 }
 
 fn main() {
+    // Create Keys
+    let config = ConfigBuilder::default().build();
+    let client_key = ClientKey::generate(config);
+    let server_key = client_key.generate_server_key();
+
+    let mut fpga_key = BelfortServerKey::from(&server_key);
+    fpga_key.connect();
+
+    set_server_key(server_key.clone());
+
     let mut stdout = stdout();
     let mut counter = 0;
     let mut execution_type = ExecutionType::Cpu; // Default is cpu
@@ -35,108 +52,11 @@ fn main() {
 
     loop {
         let (cols, rows) = terminal::size().expect("Failed name_to get terminal size");
-        stdout
-            .execute(terminal::Clear(terminal::ClearType::All))
-            .unwrap();
 
-        let x1_initial = cols / 4 - RECT_WIDTH / 2;
-        let y1_initial = rows / 2 - RECT_HEIGHT / 2;
-        let x2_initial = cols * 3 / 4 - RECT_WIDTH / 2;
-        let y2_initial = rows / 2 - RECT_HEIGHT / 2;
+        let (x1, y1, x2, y2, name_fromm, name_to, from, amount, to, color, exec_time) =
+            get_transaction_display(counter, cols, rows, &client_key);
 
-        let mut from = String::new();
-        let mut amount = String::new();
-        let mut to = String::new();
-
-        let (x1, y1, x2, y2, name_fromm, name_to, from, amount, to, color) = match counter {
-            0 => (
-                x1_initial,
-                y1_initial,
-                x2_initial,
-                y2_initial,
-                "Alice",
-                "Bob",
-                "$50",
-                "$40",
-                "$30",
-                Color::Green,
-            ),
-            1 => (
-                x1_initial,
-                y1_initial,
-                x2_initial,
-                y2_initial,
-                "Alice",
-                "Bob",
-                "###",
-                "###",
-                "###",
-                Color::Red,
-            ),
-            2 => (
-                x1_initial,
-                y1_initial,
-                x2_initial,
-                y2_initial,
-                "Alice",
-                "Bob",
-                "Enc($50)",
-                "Enc($40)",
-                "Enc($30)",
-                Color::Red,
-            ),
-            _ => {
-                let mut rng = rand::thread_rng();
-                let mut x1;
-                let mut x2;
-                let mut y1;
-                let mut y2;
-                // Ensure |x1 - x2| is even
-                loop {
-                    x1 = rng.gen_range(1..(cols / 2).saturating_sub(RECT_WIDTH));
-                    x2 = rng.gen_range((cols / 2)..cols.saturating_sub(RECT_WIDTH));
-                    if (x1 as i32 - x2 as i32).abs() % 2 == 0 {
-                        break;
-                    }
-                }
-                // Ensure |y1 - y2| >= 4
-                loop {
-                    y1 = rng.gen_range(1..rows.saturating_sub(RECT_HEIGHT));
-                    y2 = rng.gen_range(1..rows.saturating_sub(RECT_HEIGHT));
-                    if (y1 as i32 - y2 as i32).abs() >= 4 {
-                        break;
-                    }
-                }
-                from = format!("Enc(${})", rng.gen_range(20..100));
-                amount = format!("Enc(${})", rng.gen_range(1..100));
-                to = format!("Enc(${})", rng.gen_range(1..100));
-
-                // Pick two different random names
-                let idx1 = rng.gen_range(0..NAMES.len());
-                let mut idx2;
-                loop {
-                    idx2 = rng.gen_range(0..NAMES.len());
-                    if idx2 != idx1 {
-                        break;
-                    }
-                }
-                let name_fromm = NAMES[idx1];
-                let name_to = NAMES[idx2];
-
-                (
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    name_fromm,
-                    name_to,
-                    from.as_str(),
-                    amount.as_str(),
-                    to.as_str(),
-                    Color::Red,
-                )
-            }
-        };
+        clear_terminal(&mut stdout);
 
         draw_rectangle(&mut stdout, x1, y1, RECT_WIDTH, RECT_HEIGHT);
         draw_rectangle(&mut stdout, x2, y2, RECT_WIDTH, RECT_HEIGHT);
@@ -161,7 +81,11 @@ fn main() {
         // Print execution_type at the bottom if counter > 2
         if counter > 2 {
             stdout.execute(SetForegroundColor(Yellow)).unwrap();
-            print!("{}", format!("{:?}", execution_type).to_uppercase());
+            print!(
+                "{} {:?}",
+                format!("{:?}", execution_type).to_uppercase(),
+                exec_time
+            );
             stdout.execute(ResetColor).unwrap();
         }
 
@@ -185,29 +109,194 @@ fn main() {
                             ..
                         } => {
                             execution_type = ExecutionType::Fpga;
+                            set_server_key(fpga_key.clone());
                         }
                         event::KeyEvent {
                             code: event::KeyCode::Char('c'),
                             ..
                         } => {
                             execution_type = ExecutionType::Cpu;
+                            set_server_key(server_key.clone());
                         }
                         event::KeyEvent {
-                            code: event::KeyCode::Char('e'),
+                            code: event::KeyCode::Char('q'),
                             ..
                         } => {
                             crossterm::terminal::disable_raw_mode().unwrap();
                             stdout.execute(cursor::Show).unwrap();
+                            fpga_key.disconnect();
                             return;
                         }
                         _ => {}
                     }
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
         counter += 1;
     }
+}
+
+fn get_transaction_display(
+    counter: usize,
+    cols: u16,
+    rows: u16,
+    client_key: &ClientKey,
+) -> (
+    u16,
+    u16,
+    u16,
+    u16,
+    &'static str,
+    &'static str,
+    &str,
+    &str,
+    &str,
+    Color,
+    time::Duration,
+) {
+    const INTRO_FROM_NAME: &str = "Alice";
+    const INTRO_TO_NAME: &str = "Bob";
+    const INTRO_FROM_AMOUNT: &str = "$50";
+    const INTRO_TRANSFER_AMOUNT: &str = "$40";
+    const INTRO_TO_AMOUNT: &str = "$30";
+    const INTRO_MASKED: &str = " ### " ;
+    const INTRO_ENC_FROM_AMOUNT: &str = "Enc($50)";
+    const INTRO_ENC_TRANSFER_AMOUNT: &str = " Enc($40) ";
+    const INTRO_ENC_TO_AMOUNT: &str = "Enc($30)";
+
+    let mut exec_time = time::Duration::from_secs(0);
+
+    match counter {
+        0 => (
+            cols / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            cols * 3 / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            INTRO_FROM_NAME,
+            INTRO_TO_NAME,
+            INTRO_FROM_AMOUNT,
+            INTRO_TRANSFER_AMOUNT,
+            INTRO_TO_AMOUNT,
+            Color::Green,
+            exec_time,
+        ),
+        1 => (
+            cols / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            cols * 3 / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            INTRO_FROM_NAME,
+            INTRO_TO_NAME,
+            INTRO_MASKED,
+            INTRO_MASKED,
+            INTRO_MASKED,
+            Color::Red,
+            exec_time,
+        ),
+        2 => (
+            cols / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            cols * 3 / 4 - RECT_WIDTH / 2,
+            rows / 2 - RECT_HEIGHT / 2,
+            INTRO_FROM_NAME,
+            INTRO_TO_NAME,
+            INTRO_ENC_FROM_AMOUNT,
+            INTRO_ENC_TRANSFER_AMOUNT,
+            INTRO_ENC_TO_AMOUNT,
+            Color::Red,
+            exec_time,
+        ),
+        _ => {
+            let mut rng = rand::rng();
+            let mut x1;
+            let mut x2;
+            let mut y1;
+            let mut y2;
+            // Ensure |x1 - x2| is even
+            loop {
+                x1 = rng.random_range(1..(cols / 2).saturating_sub(RECT_WIDTH));
+                x2 = rng.random_range((cols / 2)..cols.saturating_sub(RECT_WIDTH));
+                if (x1 as i32 - x2 as i32).abs() % 2 == 0 {
+                    break;
+                }
+            }
+            // Ensure |y1 - y2| >= 4
+            loop {
+                y1 = rng.random_range(1..rows.saturating_sub(RECT_HEIGHT));
+                y2 = rng.random_range(1..rows.saturating_sub(RECT_HEIGHT));
+                if (y1 as i32 - y2 as i32).abs() >= 4 {
+                    break;
+                }
+            }
+
+            let from: u64 = rng.random_range(20..100);
+            let amount: u64 = rng.random_range(1..from);
+            let to: u64 = rng.random_range(1..100);
+
+            let encrypted_from = FheUint64::encrypt(from, client_key);
+            let encrypted_transfer = FheUint64::encrypt(amount, client_key);
+            let encrypted_to = FheUint64::encrypt(to, client_key);
+
+            let time_start = Instant::now();
+
+            let (_encrypted_new_to, _encrypted_new_from) =
+                erc20_transaction(&encrypted_transfer, &encrypted_to, &encrypted_from);
+
+            exec_time = time_start.elapsed();
+
+            let str_from = format!("Enc(${})", from - amount);
+            let str_amount = format!(" Enc(${}) ", amount);
+            let str_to = format!("Enc(${})", to + amount);
+
+            // Pick two different random names
+            let idx1 = rng.random_range(0..NAMES.len());
+            let mut idx2;
+            loop {
+                idx2 = rng.random_range(0..NAMES.len());
+                if idx2 != idx1 {
+                    break;
+                }
+            }
+            let name_fromm = NAMES[idx1];
+            let name_to = NAMES[idx2];
+
+            (
+                x1,
+                y1,
+                x2,
+                y2,
+                name_fromm,
+                name_to,
+                Box::leak(str_from.into_boxed_str()),
+                Box::leak(str_amount.into_boxed_str()),
+                Box::leak(str_to.into_boxed_str()),
+                Color::Red,
+                exec_time,
+            )
+        }
+    }
+}
+
+fn erc20_transaction(
+    amount: &FheUint64,
+    balance_to: &FheUint64,
+    balance_from: &FheUint64,
+) -> (FheUint64, FheUint64) {
+    let transfer_value = amount
+        .le(balance_to)
+        .select(amount, &FheUint64::encrypt_trivial(0u64));
+
+    let new_balance_to = balance_to + &transfer_value;
+    let new_balance_from = balance_from - &transfer_value;
+
+    (new_balance_to, new_balance_from)
+}
+
+fn clear_terminal(stdout: &mut std::io::Stdout) {
+    stdout
+        .execute(terminal::Clear(terminal::ClearType::All))
+        .unwrap();
 }
 
 fn draw_rectangle(stdout: &mut std::io::Stdout, x: u16, y: u16, width: u16, height: u16) {

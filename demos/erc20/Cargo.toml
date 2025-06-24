@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# tfhe = { workspace = true, features = ["fpga"]}
+tfhe = { workspace = true }
+env_logger = "0.11.5"
+rand = "0.9.1"
+rand_chacha = "0.9.0"
 crossterm = "0.27"
-rand = "0.8"
 
-# [features]
-# fpga = ["tfhe/fpga"]
+
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
 
 [[bin]]
 name = "demo"
