@@ -1,0 +1,20 @@
+[package]
+name = "tfhe-trivium"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+tfhe = { workspace = true, features = ["fpga"]}
+rayon = "1.10.0"
+
+[features]
+fpga = ["tfhe/fpga"]
+
+[[bin]]
+name = "demo-byte"
+path = "src/demo/demo_byte.rs"
+
+[[bin]]
+name = "demo-shortint"
+path = "src/demo/demo_shortint.rs"

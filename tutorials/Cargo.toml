@@ -1,0 +1,20 @@
+[package]
+name = "example"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tfhe = { workspace = true }
+env_logger = "0.11.5"
+rand = "0.9.1"
+rand_chacha = "0.9.0"
+
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
+
+[[bin]]
+name = "weighted-sum"
+path = "src/main.rs"

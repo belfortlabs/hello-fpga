@@ -1,3 +1,16 @@
 [workspace]
 resolver = "2"
-members = ["hello-fpga"]
+members = ["demos/trivium", "tutorials"]
+
+[workspace.dependencies]
+tfhe = { path = "../tfhe-rs/tfhe", features = [
+    "shortint",
+    "integer",
+    "experimental-force_fft_algo_dif4",
+] }
+
+[profile.devo]
+inherits = "dev"
+opt-level = 3
+lto = "off"
+debug-assertions = false

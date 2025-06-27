@@ -1,0 +1,7 @@
+.vscode/
+target/
+testvectors/
+
+**/Cargo.lock
+**/*.bin
+**/*.bak
