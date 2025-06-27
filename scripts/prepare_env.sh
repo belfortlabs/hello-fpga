@@ -10,11 +10,10 @@ export TFHERS_TAG=tfhe-rs-0.11.3
 export TFHERS_URL=https://github.com/zama-ai/tfhe-rs.git
 export PATCH_COMMIT_MSG="Belfort Patch Applied"
 
-get_patch_commit() {
-    git log --grep="$PATCH_COMMIT_MSG" --format="%H" | head -n 1
+separator() {
+    printf "\n=========================================================\n\n"
 }
 
-echo "============="
 if [ -d "$TFHERS_DIR" ]; then 
     echo "Stash changes and set ZAMA GitHub as the origin"
     pushd $TFHERS_DIR
@@ -26,9 +25,9 @@ else
     pushd $TFHERS_DIR
 fi
 
-echo "==========================================="
+separator
 echo "Checkout TFHE-rs for Belfort FPGA acceleration"
-PATCH_COMMIT=$(get_patch_commit)
+PATCH_COMMIT=$(git log --grep="$PATCH_COMMIT_MSG" --format="%H" | head -n 1)
 
 if [ -n "$PATCH_COMMIT" ]; then
     git checkout $PATCH_COMMIT
@@ -38,13 +37,13 @@ else
     echo "Applying Belfort patch..."
     git apply $REPO_DIR/belfort.patch
 
-    echo "================================="
+    separator
     git add .
     echo "Group all changes into one commit"
     git commit -m "$PATCH_COMMIT_MSG"
 fi
 
-echo "====================="
+separator
 echo "Update rust if needed"
 
 make install_rs_check_toolchain
