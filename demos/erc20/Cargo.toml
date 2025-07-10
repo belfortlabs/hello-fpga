@@ -8,7 +8,7 @@ tfhe = { workspace = true }
 env_logger = "0.11.5"
 rand = "0.9.1"
 rand_chacha = "0.9.0"
-crossterm = "0.27"
+crossterm = "0.29"
 
 
 [features]
