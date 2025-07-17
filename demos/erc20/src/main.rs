@@ -113,25 +113,16 @@ fn main() {
         } else {
             if event::poll(time::Duration::from_millis(1)).unwrap() {
                 if let Event::Key(key_event) = event::read().unwrap() {
-                    match key_event {
-                        event::KeyEvent {
-                            code: event::KeyCode::Char('f'),
-                            ..
-                        } => {
+                    match key_event.code {
+                        event::KeyCode::Char('f') => {
                             execution_type = ExecutionType::Fpga;
                             set_server_key(fpga_key.clone());
                         }
-                        event::KeyEvent {
-                            code: event::KeyCode::Char('c'),
-                            ..
-                        } => {
+                        event::KeyCode::Char('c') => {
                             execution_type = ExecutionType::Cpu;
                             set_server_key(server_key.clone());
                         }
-                        event::KeyEvent {
-                            code: event::KeyCode::Char('q'),
-                            ..
-                        } => {
+                        event::KeyCode::Char('q') => {
                             crossterm::terminal::disable_raw_mode().unwrap();
                             clear_terminal(&mut stdout);
                             stdout.execute(cursor::MoveTo(0, 0)).unwrap();
