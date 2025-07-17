@@ -1,4 +1,4 @@
-use crossterm::style::Color::Yellow;
+use crossterm::style::Color::*;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use crossterm::{
     cursor,
@@ -22,6 +22,12 @@ const NAMES: &[&str] = &[
     "Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Karl",
     "Laura", "Mallory", "Niaj", "Olivia", "Peggy", "Quentin", "Rupert", "Sybil", "Trent", "Uma",
     "Victor", "Wendy", "Xavier", "Yvonne", "Zara",
+];
+
+const INSTRUCTIONS: &[&str] = &[
+    "Press 'f' to switch to FPGA execution",
+    "Press 'c' to switch to CPU execution",
+    "Press 'q' to quit",
 ];
 
 #[derive(Debug)]
@@ -67,8 +73,8 @@ fn main() {
             x2,
             y2 + RECT_HEIGHT / 2,
         );
-        draw_text(&mut stdout, x1, y1, name_fromm, Color::White);
-        draw_text(&mut stdout, x2, y2, name_to, Color::White);
+        draw_text(&mut stdout, x1, y1, name_fromm, White);
+        draw_text(&mut stdout, x2, y2, name_to, White);
         draw_text(&mut stdout, x1, y1 + 1, from, color);
         draw_text(&mut stdout, (x1 + x2) / 2, (y1 + y2) / 2, amount, color);
         draw_text(&mut stdout, x2, y2 + 1, to, color);
@@ -78,7 +84,6 @@ fn main() {
         // Move cursor to the last row to avoid overwriting drawings
         stdout.execute(cursor::MoveTo(0, rows - 1)).unwrap();
 
-        // Print execution_type at the bottom if counter > 2
         if counter > 2 {
             stdout.execute(SetForegroundColor(Yellow)).unwrap();
             print!(
@@ -86,11 +91,16 @@ fn main() {
                 format!("{:?}", execution_type).to_uppercase(),
                 exec_time
             );
+            draw_instructions(&mut stdout, 0, &execution_type);
             stdout.execute(ResetColor).unwrap();
         }
 
         // Wait for a key press for the first 4 iterations, otherwise just iterate continuously and handle key
         if counter < 3 {
+            stdout.execute(cursor::MoveTo(0, 0)).unwrap();
+            stdout.execute(SetForegroundColor(Cyan)).unwrap();
+            print!("Press any key until animation starts");
+            stdout.flush().unwrap();
             loop {
                 if event::poll(time::Duration::from_millis(100)).unwrap() {
                     if let Event::Key(key_event) = event::read().unwrap() {
@@ -160,7 +170,7 @@ fn get_transaction_display(
     const INTRO_FROM_AMOUNT: &str = "$50";
     const INTRO_TRANSFER_AMOUNT: &str = "$40";
     const INTRO_TO_AMOUNT: &str = "$30";
-    const INTRO_MASKED: &str = " ### " ;
+    const INTRO_MASKED: &str = " ### ";
     const INTRO_ENC_FROM_AMOUNT: &str = "Enc($50)";
     const INTRO_ENC_TRANSFER_AMOUNT: &str = " Enc($40) ";
     const INTRO_ENC_TO_AMOUNT: &str = "Enc($30)";
@@ -178,7 +188,7 @@ fn get_transaction_display(
             INTRO_FROM_AMOUNT,
             INTRO_TRANSFER_AMOUNT,
             INTRO_TO_AMOUNT,
-            Color::Green,
+            Green,
             exec_time,
         ),
         1 => (
@@ -191,7 +201,7 @@ fn get_transaction_display(
             INTRO_MASKED,
             INTRO_MASKED,
             INTRO_MASKED,
-            Color::Red,
+            Red,
             exec_time,
         ),
         2 => (
@@ -204,7 +214,7 @@ fn get_transaction_display(
             INTRO_ENC_FROM_AMOUNT,
             INTRO_ENC_TRANSFER_AMOUNT,
             INTRO_ENC_TO_AMOUNT,
-            Color::Red,
+            Red,
             exec_time,
         ),
         _ => {
@@ -271,7 +281,7 @@ fn get_transaction_display(
                 Box::leak(str_from.into_boxed_str()),
                 Box::leak(str_amount.into_boxed_str()),
                 Box::leak(str_to.into_boxed_str()),
-                Color::Red,
+                Red,
                 exec_time,
             )
         }
@@ -377,5 +387,18 @@ fn draw_text(stdout: &mut std::io::Stdout, x: u16, y: u16, text: &str, color: Co
     stdout.execute(cursor::MoveTo(start_x, center_y)).unwrap();
     stdout.execute(SetForegroundColor(color)).unwrap();
     print!("{text}");
+    stdout.execute(ResetColor).unwrap();
+}
+
+fn draw_instructions(stdout: &mut std::io::Stdout, cols: u16, execution: &ExecutionType) {
+    let instr_x = cols.saturating_sub(40); // 35 chars from the right edge
+    stdout.execute(cursor::MoveTo(instr_x, 0)).unwrap();
+    stdout.execute(SetForegroundColor(Cyan)).unwrap();
+    match execution {
+        ExecutionType::Cpu => println!("{}", INSTRUCTIONS[0]),
+        ExecutionType::Fpga => println!("{}", INSTRUCTIONS[1]),
+    };
+    stdout.execute(cursor::MoveTo(instr_x, 1)).unwrap();
+    println!("{}", INSTRUCTIONS[2]);
     stdout.execute(ResetColor).unwrap();
 }
