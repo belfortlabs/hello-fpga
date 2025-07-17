@@ -6,7 +6,7 @@ use crossterm::{
     terminal, ExecutableCommand,
 };
 use rand::Rng;
-use std::io::{stdout, Write};
+use std::io::{stdout, Stdout, Write};
 use std::time;
 use std::time::Instant;
 
@@ -133,6 +133,8 @@ fn main() {
                             ..
                         } => {
                             crossterm::terminal::disable_raw_mode().unwrap();
+                            clear_terminal(&mut stdout);
+                            stdout.execute(cursor::MoveTo(0, 0)).unwrap();
                             stdout.execute(cursor::Show).unwrap();
                             fpga_key.disconnect();
                             return;
@@ -303,13 +305,13 @@ fn erc20_transaction(
     (new_balance_to, new_balance_from)
 }
 
-fn clear_terminal(stdout: &mut std::io::Stdout) {
+fn clear_terminal(stdout: &mut Stdout) {
     stdout
         .execute(terminal::Clear(terminal::ClearType::All))
         .unwrap();
 }
 
-fn draw_rectangle(stdout: &mut std::io::Stdout, x: u16, y: u16, width: u16, height: u16) {
+fn draw_rectangle(stdout: &mut Stdout, x: u16, y: u16, width: u16, height: u16) {
     stdout.execute(cursor::MoveTo(x, y)).unwrap();
     println!("┌{}┐", "─".repeat((width - 2) as usize));
     for row in 1..height - 1 {
@@ -320,7 +322,7 @@ fn draw_rectangle(stdout: &mut std::io::Stdout, x: u16, y: u16, width: u16, heig
     println!("└{}┘", "─".repeat((width - 2) as usize));
 }
 
-fn draw_arrow(stdout: &mut std::io::Stdout, x1: u16, y1: u16, x2: u16, y2: u16) {
+fn draw_arrow(stdout: &mut Stdout, x1: u16, y1: u16, x2: u16, y2: u16) {
     let mid_x = (x1 + x2) / 2;
     let mut x = x1;
     let mut y = y1;
@@ -374,7 +376,7 @@ fn draw_arrow(stdout: &mut std::io::Stdout, x1: u16, y1: u16, x2: u16, y2: u16) 
     print!(">");
 }
 
-fn draw_text(stdout: &mut std::io::Stdout, x: u16, y: u16, text: &str, color: Color) {
+fn draw_text(stdout: &mut Stdout, x: u16, y: u16, text: &str, color: Color) {
     // Center the text within the rectangle
     let text_width = text.len() as u16;
     let center_x = x + RECT_WIDTH / 2;
@@ -390,7 +392,7 @@ fn draw_text(stdout: &mut std::io::Stdout, x: u16, y: u16, text: &str, color: Co
     stdout.execute(ResetColor).unwrap();
 }
 
-fn draw_instructions(stdout: &mut std::io::Stdout, cols: u16, execution: &ExecutionType) {
+fn draw_instructions(stdout: &mut Stdout, cols: u16, execution: &ExecutionType) {
     let instr_x = cols.saturating_sub(40); // 35 chars from the right edge
     stdout.execute(cursor::MoveTo(instr_x, 0)).unwrap();
     stdout.execute(SetForegroundColor(Cyan)).unwrap();
