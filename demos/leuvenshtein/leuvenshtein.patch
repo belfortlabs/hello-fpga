@@ -1,0 +1,3527 @@
+diff --git a/apps/fpga-test/src/fpga-shortint.rs b/apps/fpga-test/src/fpga-shortint.rs
+new file mode 100644
+index 00000000..d6fa588a
+--- /dev/null
++++ b/apps/fpga-test/src/fpga-shortint.rs
+@@ -0,0 +1,210 @@
++#![allow(non_upper_case_globals)]
++#![allow(non_camel_case_types)]
++#![allow(non_snake_case)]
++// Supress not FFI-safe warning
++#![allow(improper_ctypes)]
++
++use rand::{Rng, SeedableRng};
++use std::time::Instant;
++use tfhe::shortint::server_key::LookupTable;
++
++use tfhe::shortint::prelude::*;
++
++use tfhe::core_crypto::fpga::shortint::BelfortFpgaUtils;
++
++use tfhe::core_crypto::commons::generators::DeterministicSeeder;
++use tfhe::core_crypto::commons::math::random::Seed;
++use tfhe::core_crypto::prelude::*;
++use tfhe::shortint::engine::ShortintEngine;
++
++const VERBOSE: bool = false;
++
++fn main() {
++  const TEST_COUNT: u32 = 48*48*3;
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Deterministic engine
++
++  let deterministic_seed = Seed(0);
++  let mut seeder = DeterministicSeeder::<ActivatedRandomGenerator>::new(deterministic_seed);
++  let shortint_engine = ShortintEngine::new_from_seeder(&mut seeder);
++  ShortintEngine::replace_thread_local(shortint_engine);
++
++  let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(0);
++  // let mut rng = rand::thread_rng();
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Params and Keys
++
++  let params = tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2;
++
++  let client_key = ClientKey::new(params);
++  let server_key = ServerKey::new(&client_key);
++
++  let mut fpga = BelfortFpgaUtils::new(params);
++
++  server_key.connect(&mut fpga, 1);
++
++  //////////////////////////////////////////////////////////////////////////////
++  // LUTs
++
++  const LUT_COUNT: usize = 9;
++
++  let equal_vector = [9u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
++  let equal_10_vector = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
++  let min_vector = [0u64, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0].to_vec();
++
++  let myLUTS: [(LookupTable<Vec<u64>>, &'static str); LUT_COUNT] = [
++    (
++      server_key.generate_lookup_table(|_: u64| 1 << 61),
++      "0_gates",
++    ),
++    (server_key.generate_lookup_table(|x: u64| x), "1_identity"),
++    (
++      server_key.generate_lookup_table(|x: u64| x % server_key.message_modulus.0 as u64),
++      "2_msg_extract",
++    ),
++    (
++      server_key.generate_lookup_table(|x: u64| x / server_key.message_modulus.0 as u64),
++      "3_carry_extract",
++    ),
++    (
++      server_key
++        .generate_lookup_table_bivariate(|x, y: u64| (x * y) % server_key.message_modulus.0 as u64)
++        .acc,
++      "4_mul_lsb",
++    ),
++    (
++      server_key
++        .generate_lookup_table_bivariate(|x, y: u64| (x * y) / server_key.message_modulus.0 as u64)
++        .acc,
++      "5_mul_msb",
++    ),
++    (
++      server_key.generate_lookup_table_vector(&equal_vector),
++      "6_equal_vector",
++    ),
++    (
++      server_key.generate_lookup_table_vector(&equal_10_vector),
++      "7_equal_vector",
++    ),
++    (
++      server_key.generate_lookup_table_vector(&min_vector),
++      "8_min_vector",
++    ),
++  ];
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Create Inputs
++
++  for test in 0..TEST_COUNT {
++    let mut inputs = Vec::<u64>::new();
++
++    let mut ct_inputs = Vec::<Ciphertext>::new();
++    let mut lut_indexes = Vec::<usize>::new();
++    let mut luts = Vec::new();
++
++    // Fix batch size at the first test
++    //
++    // let pack_size = rng.gen_range(1..=32);
++    const batch_size: usize = 8;
++    let pack_size = rng.gen_range(1..=3) * batch_size;
++
++    const lut_index: usize = 6;
++
++    // for _ in 0..pack_size {
++    //   let input = rng.gen_range(0..params.message_modulus.0) as u64;
++    //   inputs.push(input);
++    //   ct_inputs.push(client_key.encrypt(input));
++
++    //   let lut_index = rng.gen_range(0..LUT_COUNT);
++    //   lut_indexes.push(lut_index);
++
++    //   let lut = myLUTS[lut_index].0.clone();
++    //   luts.push(lut);
++    // }
++
++    let number_of_luts: usize = 48*48*3*8;
++
++    for _ in 0..48{
++      let mut input = rng.gen_range(0..params.message_modulus.0) as u64;
++
++      // input *= 3; 
++      // input = input % 16;
++
++      inputs.push(input);
++      ct_inputs.push(client_key.encrypt(input));
++
++      
++      lut_indexes.push(lut_index);
++      luts.push(myLUTS[lut_index].0.clone());
++
++    }
++
++    let ref_to_ct_inputs: Vec<&Ciphertext> = ct_inputs.iter().collect();
++
++    ////////////////////////////////////////////////////////////////////////////
++    // Execute on CPU
++
++    let start_cpu = Instant::now();
++
++    let outputs_cpu = server_key.apply_lookup_table_packed_parallellized(ref_to_ct_inputs.clone(), &luts);
++
++    let exec_time_cpu = start_cpu.elapsed();
++
++    ////////////////////////////////////////////////////////////////////////////
++    // Execute on FPGA
++
++    let start_fpga = Instant::now();
++
++    let outputs_fpga =
++      server_key.apply_lookup_table_packed_fpga(ref_to_ct_inputs, lut_indexes.clone(), &mut fpga);
++
++    let exec_time_fpga = start_fpga.elapsed();
++
++    ////////////////////////////////////////////////////////////////////////////
++    // Compare Results and Verify
++
++    let mut success = true;
++    for (index, (output_cpu, output_fpga)) in
++      outputs_cpu.iter().zip(outputs_fpga.iter()).enumerate()
++    {
++      let expected: u64 = client_key.decrypt(output_cpu);
++      let calculated: u64 = client_key.decrypt(output_fpga);
++      let plaintext: u64 = client_key.decrypt_no_decode(output_fpga);
++
++      if expected == calculated {
++        if VERBOSE {
++          println!(
++            "  \x1b[32m[PASS]\x1b[0m [{: >2}] input {: >5}, lut {:>5}, expected_msg_out {: >5} === decrypted_msg_out {: >5}  (decrypted_pt_out {: >5})",
++            index, inputs[index], lut_indexes[index], expected, calculated, plaintext
++          );
++        }
++      } else {
++        success = false;
++        if VERBOSE {
++          println!(
++            "  \x1b[31m[FAIL]\x1b[0m [{: >2}] input {: >5}, lut {:>5}, expected_msg_out {: >5} === decrypted_msg_out {: >5} (decrypted_pt_out {: >5})",
++            index, inputs[index], lut_indexes[index], expected, calculated, plaintext
++          );
++        }
++      }
++    }
++
++    if success {
++      if test % 25 == 0 {
++        println!(
++        "\x1b[32mTEST {: >2} PASSED\x1b[0m | Batch Size {: >3} | In {:?} on CPU vs {:?} on FPGA",
++        test, pack_size, exec_time_cpu, exec_time_fpga
++      );
++    }
++    } else {
++      println!(
++        "\x1b[31mTEST {: >2} FAILED\x1b[0m | Batch Size {: >3} | In {:?} on CPU vs {:?} on FPGA",
++        test, pack_size, exec_time_cpu, exec_time_fpga
++      );
++    }
++  }
++
++  server_key.disconnect(&mut fpga);
++}
+\ No newline at end of file
+diff --git a/tfhe/benches/fpga/erc20.rs b/tfhe/benches/fpga/erc20.rs
+index 67afe2ae..4a4a54cf 100644
+--- a/tfhe/benches/fpga/erc20.rs
++++ b/tfhe/benches/fpga/erc20.rs
+@@ -1,3 +1,6 @@
++#[path = "utilities.rs"]
++mod utilities;
++
+ use criterion::measurement::WallTime;
+ use criterion::{black_box, criterion_group, BenchmarkGroup, Criterion};
+ use std::env;
+@@ -8,7 +11,6 @@ use tfhe::{set_server_key, ClientKey, ConfigBuilder, FheUint64};
+ const BENCH_GROUP_NAME: &str = "erc20";
+ const BENCH_SAMPLE_SIZE: usize = 10;
+ const BENCH_MEASUREMENT_TIME: u64 = 180;
+-const BENCH_FPGA_COUNTS: [usize; 2] = [1, 2];
+ 
+ fn erc20_transaction(
+     amount: &FheUint64,
+@@ -79,7 +81,7 @@ fn bench_erc20_on_fpga(c: &mut Criterion) {
+     let server_key = client_key.generate_server_key();
+     let mut fpga_key = BelfortServerKey::from(&server_key);
+ 
+-    for fpga_count in BENCH_FPGA_COUNTS {
++    for fpga_count in utilities::get_fpga_counts() {
+         let fpga_indexes = (0..fpga_count).collect();
+         fpga_key.connect_to(fpga_indexes);
+         set_server_key(fpga_key.clone());
+diff --git a/tfhe/benches/fpga/integer.rs b/tfhe/benches/fpga/integer.rs
+index af6171e9..6c54ad70 100644
+--- a/tfhe/benches/fpga/integer.rs
++++ b/tfhe/benches/fpga/integer.rs
+@@ -1,5 +1,4 @@
+ #![allow(dead_code)]
+-
+ use criterion::{criterion_group, Criterion};
+ use itertools::{Itertools, Product};
+ use rand::prelude::*;
+@@ -11,6 +10,9 @@ use tfhe::integer::{IntegerKeyKind, RadixCiphertext, U256};
+ use tfhe::shortint::parameters::*;
+ use tfhe::shortint::Ciphertext;
+ 
++#[path = "utilities.rs"]
++mod utilities;
++
+ const BENCH_GROUP_NAME: &str = "integer::fpga";
+ const BENCH_SAMPLE_SIZE: usize = 10;
+ const BENCH_MEASUREMENT_TIME: u64 = 60;
+@@ -43,7 +45,7 @@ struct ParamsAndConfigsIter {
+ impl Default for ParamsAndConfigsIter {
+     fn default() -> Self {
+         let default_bench_bit_sizes = vec![8, 32, 64];
+-        let default_bench_fpga_counts = vec![1, 4];
++        let default_bench_fpga_counts = utilities::get_fpga_counts();
+         let default_bench_params = vec![PARAM_MESSAGE_2_CARRY_2_KS_PBS];
+ 
+         let params = default_bench_params.into_iter();
+diff --git a/tfhe/benches/fpga/throughput.rs b/tfhe/benches/fpga/throughput.rs
+index 103d2701..fa4201ee 100644
+--- a/tfhe/benches/fpga/throughput.rs
++++ b/tfhe/benches/fpga/throughput.rs
+@@ -17,17 +17,19 @@ use tfhe::shortint::client_key::ClientKey as ShortintClientKey;
+ use tfhe::shortint::parameters::{ClassicPBSParameters, PARAM_MESSAGE_2_CARRY_2_KS_PBS};
+ use tfhe::shortint::server_key::ServerKey as ShortintServerKey;
+ 
++#[path = "utilities.rs"]
++mod utilities;
++
+ const BOOLEAN_PARAMS: BooleanParameters = DEFAULT_PARAMETERS_KS_PBS;
+ const SHORTINT_PARAMS: ClassicPBSParameters = PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+ const PACK_SIZES: [usize; 18] = [
+     1, 2, 3, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128, 256, 512, 1024,
+ ];
+-const FPGA_COUNTS: [usize; 3] = [1, 2, 4];
+ 
+ fn bench_boolean_throughput(c: &mut Criterion) {
+     let params = BOOLEAN_PARAMS;
+     let pack_sizes = PACK_SIZES.to_vec();
+-    let fpga_counts = FPGA_COUNTS.to_vec();
++    let fpga_counts = utilities::get_fpga_counts();
+ 
+     let mut bench_group = c.benchmark_group("fpga::throughput");
+ 
+@@ -61,7 +63,7 @@ fn bench_boolean_throughput(c: &mut Criterion) {
+ fn bench_shortint_throughput(c: &mut Criterion) {
+     let params = SHORTINT_PARAMS;
+     let pack_sizes = PACK_SIZES.to_vec();
+-    let fpga_counts = FPGA_COUNTS.to_vec();
++    let fpga_counts = utilities::get_fpga_counts();
+ 
+     let mut bench_group = c.benchmark_group("fpga::throughput");
+ 
+diff --git a/tfhe/benches/fpga/utilities.rs b/tfhe/benches/fpga/utilities.rs
+new file mode 100644
+index 00000000..9eab5f14
+--- /dev/null
++++ b/tfhe/benches/fpga/utilities.rs
+@@ -0,0 +1,12 @@
++use std::env;
++
++pub fn get_fpga_counts() -> Vec<usize> {
++    let fpga_count_string = match env::var("BELFORT_FPGA_IDX") {
++        Ok(val) => val,
++        Err(err) => {
++            panic!("Cannot read BELFORT_FPGA_IDX variable: {}", err)
++        }
++    };
++    let count = fpga_count_string.split(':').collect::<Vec<_>>().len();
++    (0..count).map(|i| 2_usize.pow(i as u32)).collect()
++}
+diff --git a/tfhe/src/boolean/engine/mod.rs b/tfhe/src/boolean/engine/mod.rs
+index d0534d7b..609130b1 100644
+--- a/tfhe/src/boolean/engine/mod.rs
++++ b/tfhe/src/boolean/engine/mod.rs
+@@ -1013,4 +1013,4 @@ impl BinaryGatesEngine<bool, &Ciphertext, ServerKey> for BooleanEngine {
+     fn xnor(&mut self, ct_left: bool, ct_right: &Ciphertext, server_key: &ServerKey) -> Ciphertext {
+         self.xnor(ct_right, ct_left, server_key)
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/tfhe/src/boolean/server_key/mod.rs b/tfhe/src/boolean/server_key/mod.rs
+index b4407e9e..cdeecee3 100644
+--- a/tfhe/src/boolean/server_key/mod.rs
++++ b/tfhe/src/boolean/server_key/mod.rs
+@@ -169,3 +169,4 @@ impl From<ServerKey> for BelfortBooleanServerKey {
+         Self::default(value)
+     }
+ }
++
+diff --git a/tfhe/src/core_crypto/fpga/accelerators/accelerators.rs b/tfhe/src/core_crypto/fpga/accelerators/accelerators.rs
+new file mode 100644
+index 00000000..2be3d1c8
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/accelerators/accelerators.rs
+@@ -0,0 +1,23 @@
++// This file is auto generated.
++
++pub const PARAM_MESSAGE_2_CARRY_2: ContainerParameters = ContainerParameters {
++  fpga_image: "/home/wlegiest/accels/SHORTINT_MESSAGE_2_CARRY_2_S16_B12_2BK_W.xclbin",  
++    batch_size: 12,
++    streaming_size: 16,
++    bsk_num_kernels: 2,
++    ksk_num_kernels: 2,
++    bsk_bits: 54,
++    bsk_frac_bits: 46,
++    ksk_bits: 34,
++  };
++
++pub const DEFAULT_PARAMETERS_KS_PBS: ContainerParameters = ContainerParameters {
++  fpga_image: "/home/wout/accels/BOOLEAN_KS_PBS_S8_B12_4B1K/public/accel.xclbin",
++  batch_size: 12,
++  streaming_size: 8,
++  bsk_num_kernels: 4,
++  ksk_num_kernels: 1,
++  bsk_bits: 34,
++  bsk_frac_bits: 27,
++  ksk_bits: 21,
++};
+diff --git a/tfhe/src/core_crypto/fpga/boolean/accelerators.rs b/tfhe/src/core_crypto/fpga/boolean/accelerators.rs
+new file mode 100644
+index 00000000..f98511f2
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/boolean/accelerators.rs
+@@ -0,0 +1,14 @@
++pub const MAX_FPGA_COUNT: usize = 4;
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub const DEFAULT_PARAMETERS_KS_PBS: FpgaParameters = FpgaParameters {
++  base_params: crate::boolean::parameters::DEFAULT_PARAMETERS_KS_PBS,
++  fpga_image: "/home/fturan/tfhe/beachball/build/DEFAULT_KSPBS/public/accel.xclbin",
++  batch_size: 10,
++  streaming_size: 8,
++  bsk_num_kernels: 8,
++  bsk_frac_bits: 27,
++  ksk_bits: 27,
++  ksk_parallel: 32,
++};
+diff --git a/tfhe/src/core_crypto/fpga/boolean/utils.rs b/tfhe/src/core_crypto/fpga/boolean/utils.rs
+new file mode 100644
+index 00000000..9d18594f
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/boolean/utils.rs
+@@ -0,0 +1,642 @@
++#![allow(non_upper_case_globals)]
++#![allow(non_camel_case_types)]
++#![allow(non_snake_case)]
++// Supress not FFI-safe warning
++#![allow(improper_ctypes)]
++#![allow(dead_code)]
++
++include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
++
++use crate::boolean::engine::bootstrapping::Bootstrapper;
++use crate::core_crypto::fpga::boolean::parameters::FpgaParameters;
++
++use crate::core_crypto::prelude::*;
++use std::ffi::CString;
++use std::mem;
++use std::os::raw::c_void;
++
++use concrete_fft::c64;
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub const MAX_FPGA_COUNT: usize = crate::core_crypto::fpga::boolean::parameters::MAX_FPGA_COUNT;
++
++pub const MAX_BATCH_COUNT: usize = 64;
++//
++// This is used for preallocating MAX_BATCH_COUNT times memories and runhandles
++// for ksk and bsk. These are kind of reservations, that will be re-used
++// later at run time, executing bootstraps. We do the reservation in
++// enable_fpga() function, rather than at re-initialising them each time
++// the bootstrap needs it, for cutting the interfacing overheads.
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub struct FpgaData {
++  pub params: FpgaParameters,
++  pub xclbin_uuid: Vec<u8>,
++  pub fpga_device: Vec<*mut c_void>,
++  pub kernelHandle_lwe_in: Vec<*mut c_void>,
++  pub kernelHandle_lwe_out: Vec<*mut c_void>,
++  pub kernelHandle_ksk: Vec<*mut c_void>,
++  pub kernelHandle_bsk: Vec<Vec<*mut c_void>>,
++  pub devmem_lwe_in: Vec<*mut c_void>,
++  pub devmem_lwe_out: Vec<*mut c_void>,
++  pub devmem_ksk: Vec<*mut c_void>,
++  pub devmem_bsk: Vec<Vec<*mut c_void>>,
++  pub runHandle_lwe_in: Vec<*mut c_void>,
++  pub runHandle_lwe_out: Vec<*mut c_void>,
++  pub runHandle_ksk: Vec<Vec<*mut c_void>>,
++  pub runHandle_bsk: Vec<Vec<Vec<*mut c_void>>>,
++  pub enabled_fpga_count: usize,
++  pub is_fpga_enabled: bool,
++}
++
++impl FpgaData {
++  pub fn null() -> Self {
++    Self {
++      params: FpgaParameters::default(),
++      xclbin_uuid: Vec::new(),
++      fpga_device: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelHandle_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelHandle_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelHandle_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelHandle_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      runHandle_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      runHandle_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      runHandle_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      runHandle_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      enabled_fpga_count: 0,
++      is_fpga_enabled: false,
++    }
++  }
++}
++
++pub fn enable_fpga(
++  bootstrapper: &mut Bootstrapper,
++  bsk: &FourierLweBootstrapKeyOwned,
++  ksk: &LweKeyswitchKey<Vec<u32>>,
++  params: FpgaParameters,
++  fpga_count: usize,
++) {
++  if bootstrapper.fpga_data.is_fpga_enabled == false {
++    let lwe_dimension = params.lwe_dimension.0;
++    let glwe_dimension = params.glwe_dimension.0;
++    let polynomial_size = params.polynomial_size.0;
++    let ks_level = params.ks_level.0;
++    let batch_size = params.batch_size;
++    let bsk_num_kernels = params.bsk_num_kernels;
++
++    bootstrapper.fpga_data.params = params;
++
++    let ks_parallel = params.ksk_parallel;
++
++    unsafe {
++      //////////////////////////////////////////////////////////////////////////
++      // program FPGA
++
++      for fpga_index in 0..fpga_count {
++        // get FPGA handle
++        bootstrapper
++          .fpga_data
++          .fpga_device
++          .push(xrtDeviceOpen(fpga_index as u32));
++
++        // program FPGA with xclbin container
++        let xclbin_file = CString::new(params.fpga_image).unwrap();
++        xrtDeviceLoadXclbinFile(bootstrapper.fpga_data.fpga_device[fpga_index], xclbin_file.as_ptr());
++
++        // get the laoded xclbin UUID (Universally Unique IDentifier)
++        let mut xclbin_uuid = vec![0u8; 16];
++        xrtDeviceGetXclbinUUID(bootstrapper.fpga_data.fpga_device[fpga_index], xclbin_uuid.as_mut_ptr());
++
++        bootstrapper.fpga_data.xclbin_uuid = xclbin_uuid.clone();
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // create kernel handles
++
++      for fpga_index in 0..fpga_count {
++        bootstrapper.fpga_data.kernelHandle_lwe_in.push({
++          let kernel_name = CString::new("ks_lwe_in").unwrap();
++          xrtPLKernelOpenExclusive(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            bootstrapper.fpga_data.xclbin_uuid.as_mut_ptr(),
++            kernel_name.as_ptr(),
++          )
++        });
++
++        bootstrapper.fpga_data.kernelHandle_lwe_out.push({
++          let kernel_name = CString::new("pbs_lwe_out").unwrap();
++          xrtPLKernelOpenExclusive(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            bootstrapper.fpga_data.xclbin_uuid.as_mut_ptr(),
++            kernel_name.as_ptr(),
++          )
++        });
++
++        bootstrapper.fpga_data.kernelHandle_ksk.push({
++          let kernel_name = CString::new("ksk").unwrap();
++          xrtPLKernelOpenExclusive(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            bootstrapper.fpga_data.xclbin_uuid.as_mut_ptr(),
++            kernel_name.as_ptr(),
++          )
++        });
++
++        bootstrapper.fpga_data.kernelHandle_bsk.push({
++          let mut kernelHandle_bsk: Vec<*mut c_void> = Vec::new();
++
++          for bsk_kernel_index in 0..bsk_num_kernels {
++            let kernel_name = CString::new(format!("bsk:{{bsk_{}}}", bsk_kernel_index + 1)).unwrap();
++            kernelHandle_bsk.push(xrtPLKernelOpenExclusive(
++              bootstrapper.fpga_data.fpga_device[fpga_index],
++              bootstrapper.fpga_data.xclbin_uuid.as_mut_ptr(),
++              kernel_name.as_ptr(),
++            ));
++          }
++          kernelHandle_bsk
++        });
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // allocate memories in device memory (FPGA memory: DDR/HBM)
++
++      let lwe_in_size = polynomial_size * glwe_dimension + ks_parallel; // This is padded (aligned) size
++      let lwe_out_size = polynomial_size * glwe_dimension + 16; // This is padded (aligned) size
++      let ksk_size = (lwe_dimension + 1) * glwe_dimension * polynomial_size * ks_level;
++      let bsk_part_size = {
++        let lwe_dimension = bsk.input_lwe_dimension().0;
++        let glwe_size = bsk.glwe_size().0;
++        let pbs_level = bsk.decomposition_level_count().0;
++        let polynomial_size = bsk.polynomial_size().0;
++        let bsk_size = lwe_dimension * pbs_level * glwe_size * glwe_size * polynomial_size / 2;
++        bsk_size / bsk_num_kernels * 2
++      };
++
++      let devmem_lwe_in_size = lwe_in_size * batch_size * MAX_BATCH_COUNT * mem::size_of::<u32>();
++      let devmem_lwe_out_size = lwe_out_size * batch_size * MAX_BATCH_COUNT * mem::size_of::<u32>();
++      let devmem_ksk_size = ksk_size * mem::size_of::<u32>();
++      let devmem_bsk_part_size = bsk_part_size * mem::size_of::<u64>();
++
++      // Allocate the memories
++
++      for fpga_index in 0..fpga_count {
++        bootstrapper.fpga_data.devmem_lwe_in.push({
++          let kernelArg_lwe_in_grp_0 =
++            xrtKernelArgGroupId(bootstrapper.fpga_data.kernelHandle_lwe_in[fpga_index], 0) as u32;
++
++          xrtBOAlloc(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            devmem_lwe_in_size,
++            0u64,
++            kernelArg_lwe_in_grp_0,
++          )
++        });
++
++        bootstrapper.fpga_data.devmem_lwe_out.push({
++          let kernelArg_lwe_out_grp_0 =
++            xrtKernelArgGroupId(bootstrapper.fpga_data.kernelHandle_lwe_out[fpga_index], 0) as u32;
++
++          xrtBOAlloc(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            devmem_lwe_out_size,
++            0u64,
++            kernelArg_lwe_out_grp_0,
++          )
++        });
++
++        bootstrapper.fpga_data.devmem_ksk.push({
++          let kernelArg_ksk_grp_0 = xrtKernelArgGroupId(bootstrapper.fpga_data.kernelHandle_ksk[fpga_index], 0) as u32;
++
++          xrtBOAlloc(
++            bootstrapper.fpga_data.fpga_device[fpga_index],
++            devmem_ksk_size,
++            0u64,
++            kernelArg_ksk_grp_0,
++          )
++        });
++
++        bootstrapper.fpga_data.devmem_bsk.push({
++          let mut devmem_bsk: Vec<*mut c_void> = Vec::new();
++          for handle in bootstrapper.fpga_data.kernelHandle_bsk[fpga_index].iter() {
++            let kernelArg_groupId = xrtKernelArgGroupId(*handle, 0) as u32;
++            devmem_bsk.push(xrtBOAlloc(
++              bootstrapper.fpga_data.fpga_device[fpga_index],
++              devmem_bsk_part_size,
++              0u64,
++              kernelArg_groupId,
++            ));
++          }
++          devmem_bsk
++        });
++      }
++
++      ////////////////////////////////////////////////////////////////////////
++      // create run handles: which are specific to one execution of a kernel;
++      // creates handles but not starts the kernels
++
++      for fpga_index in 0..fpga_count {
++        // Lwe In handles
++        bootstrapper
++          .fpga_data
++          .runHandle_lwe_in
++          .push(xrtRunOpen(bootstrapper.fpga_data.kernelHandle_lwe_in[fpga_index]));
++        // Lwe Out handles
++        bootstrapper
++          .fpga_data
++          .runHandle_lwe_out
++          .push(xrtRunOpen(bootstrapper.fpga_data.kernelHandle_lwe_out[fpga_index]));
++
++        let mut runHandle_ksk: Vec<*mut c_void> = Vec::new();
++        let mut runHandle_bsk: Vec<Vec<*mut c_void>> = Vec::new();
++        for _ in 0..MAX_BATCH_COUNT {
++          // KSK handles
++          runHandle_ksk.push(xrtRunOpen(bootstrapper.fpga_data.kernelHandle_ksk[fpga_index]));
++          // BSK handles
++          runHandle_bsk.push({
++            let bsk_handles: Vec<*mut c_void> = bootstrapper.fpga_data.kernelHandle_bsk[fpga_index]
++              .iter()
++              .map(|handle| xrtRunOpen(*handle))
++              .collect();
++            bsk_handles
++          });
++        }
++
++        bootstrapper.fpga_data.runHandle_ksk.push(runHandle_ksk);
++        bootstrapper.fpga_data.runHandle_bsk.push(runHandle_bsk);
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // set devmem related run arguments already here
++
++      for fpga_index in 0..fpga_count {
++        xrtRunSetArg(
++          bootstrapper.fpga_data.runHandle_lwe_in[fpga_index],
++          0,
++          bootstrapper.fpga_data.devmem_lwe_in[fpga_index],
++        );
++
++        xrtRunSetArg(
++          bootstrapper.fpga_data.runHandle_lwe_out[fpga_index],
++          0,
++          bootstrapper.fpga_data.devmem_lwe_out[fpga_index],
++        );
++
++        for batch_index in 0..MAX_BATCH_COUNT {
++          xrtRunSetArg(
++            bootstrapper.fpga_data.runHandle_ksk[fpga_index][batch_index],
++            0,
++            bootstrapper.fpga_data.devmem_ksk[fpga_index],
++          );
++          for (handle_index, handle) in bootstrapper.fpga_data.runHandle_bsk[fpga_index][batch_index]
++            .iter()
++            .enumerate()
++          {
++            xrtRunSetArg(*handle, 0, bootstrapper.fpga_data.devmem_bsk[fpga_index][handle_index]);
++          }
++        }
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // transfer the ksk to FPGA memory
++
++      let ksk_reordered: Vec<u32> = ksk_reorder(ksk, &params);
++
++      assert!(ksk_size == ksk_reordered.len(), "KSK re-oredering was wrong");
++
++      for fpga_index in 0..fpga_count {
++        // at the transfer;
++        //   1. allocate 4K aligned host-memory
++        //   2. copy the part to that memory
++        //   3. transfer the data from aligned host-memory to device-memory
++
++        use std::alloc::{alloc, dealloc, Layout};
++
++        let ksk_layout = Layout::from_size_align(devmem_ksk_size, 4096).expect("Invalid layout");
++        let ksk_ptr = alloc(ksk_layout) as *mut u32;
++
++        if !ksk_ptr.is_null() {
++          ksk_ptr.copy_from_nonoverlapping(ksk_reordered.as_ptr(), ksk_reordered.len());
++          xrtBOWrite(
++            bootstrapper.fpga_data.devmem_ksk[fpga_index],
++            ksk_ptr as *const c_void,
++            devmem_ksk_size,
++            0,
++          );
++          xrtBOSync(
++            bootstrapper.fpga_data.devmem_ksk[fpga_index],
++            xclBOSyncDirection_XCL_BO_SYNC_BO_TO_DEVICE,
++            devmem_ksk_size,
++            0,
++          );
++          dealloc(ksk_ptr as *mut u8, ksk_layout);
++        } else {
++          println!("Memory allocation failed");
++        }
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // transfer the bsk to FPGA memory
++
++      let bsk_reordered: Vec<Vec<u64>> = bsk_reorder(bsk, &params);
++
++      assert!(bsk_part_size == bsk_reordered[0].len(), "BSK re-oredering was wrong");
++      assert!(bsk_num_kernels == bsk_reordered.len(), "BSK re-oredering was wrong");
++
++      for fpga_index in 0..fpga_count {
++        for kernel in 0..bsk_num_kernels {
++          // at the transfer of each part;
++          //   1. allocate 4K aligned host-memory
++          //   2. copy the part to that memory
++          //   3. transfer the data from aligned host-memory to device-memory
++
++          use std::alloc::{alloc, dealloc, Layout};
++
++          let bsk_layout = Layout::from_size_align(devmem_bsk_part_size, 4096).expect("Invalid layout");
++          let bsk_ptr = alloc(bsk_layout) as *mut u64;
++
++          if !bsk_ptr.is_null() {
++            bsk_ptr.copy_from_nonoverlapping(bsk_reordered[kernel].as_ptr(), bsk_reordered[kernel].len());
++            xrtBOWrite(
++              bootstrapper.fpga_data.devmem_bsk[fpga_index][kernel],
++              bsk_ptr as *const c_void,
++              devmem_bsk_part_size,
++              0,
++            );
++            xrtBOSync(
++              bootstrapper.fpga_data.devmem_bsk[fpga_index][kernel],
++              xclBOSyncDirection_XCL_BO_SYNC_BO_TO_DEVICE,
++              devmem_bsk_part_size,
++              0,
++            );
++            dealloc(bsk_ptr as *mut u8, bsk_layout);
++          } else {
++            println!("Memory allocation failed");
++          }
++        }
++      }
++    }
++
++    bootstrapper.fpga_data.enabled_fpga_count = fpga_count;
++    bootstrapper.fpga_data.is_fpga_enabled = true;
++  }
++}
++
++pub fn ksk_reorder(ksk: &LweKeyswitchKey<Vec<u32>>, parameters: &FpgaParameters) -> Vec<u32> {
++  let lwe_dim: usize = parameters.lwe_dimension.0.cast_into();
++  let glwe_dim: usize = parameters.glwe_dimension.0.cast_into();
++  let poly_size: usize = parameters.polynomial_size.0.cast_into();
++  let ksk_lev: usize = parameters.ks_level.0.cast_into();
++
++  // Flatten
++  let mut ksk_flat: Vec<u32> = Vec::new();
++  for keyswitch_key_block in ksk.iter() {
++    for level_key_ciphertext in keyswitch_key_block.iter() {
++      for mask in level_key_ciphertext.get_mask().as_ref().iter() {
++        ksk_flat.push(*mask);
++      }
++      ksk_flat.push(*level_key_ciphertext.get_body().data);
++    }
++  }
++
++  // Reorder
++  let mut ksk_reordered: Vec<u32> = Vec::new();
++  for lwe_out_index in 0..(lwe_dim + 1) {
++    for lwe_in_index in 0..(glwe_dim * poly_size) {
++      for ksk_level_index in 0..ksk_lev {
++        let index = lwe_out_index + (lwe_dim + 1) * ksk_level_index + (lwe_dim + 1) * ksk_lev * lwe_in_index;
++        ksk_reordered.push(ksk_flat[index]);
++      }
++    }
++  }
++
++  let ksk_modswitched: Vec<u32> = {
++    let ksk_width = parameters.ksk_bits;
++
++    let modulus_switch = |num: &u32, num_bits: usize| -> u32 {
++      let cut_off_bits = 32 - num_bits;
++      let num64 = *num as u64;
++      let rounded = (num64 + (1 << (cut_off_bits - 1))) % (1 << 32);
++      let modswitched: u32 = (rounded >> cut_off_bits) as u32;
++      modswitched
++      // ((*num >> (32 - num_bits)) + 1) & ((1 << num_bits) - 1)
++      // (*num >> (32 - num_bits)) & ((1 << num_bits) - 1)
++    };
++
++    ksk_reordered
++      .clone()
++      .iter_mut()
++      .map(|num| modulus_switch(num, ksk_width))
++      .collect()
++  };
++
++  ksk_modswitched
++}
++
++pub fn bsk_reorder(bsk: &FourierLweBootstrapKeyOwned, params: &FpgaParameters) -> Vec<Vec<u64>> {
++  //////////////////////////////////////////////////////////////////////////////
++  //
++  // Step 0 : Native     : c64 [lwe_dimension]reversed([pbs_level])[glwe_size][glwe_size][fourier_polynomial_size]
++  // Step 1 : Reorder to : c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  // Step 2 : Map to     : u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  // Step 3 : Split over : NUM_BSK_KERNELS
++  //
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Sizes and utility functions
++  //
++
++  let lwe_dimension: usize = bsk.input_lwe_dimension().0;
++  let glwe_size: usize = bsk.glwe_size().0;
++  let pbs_level: usize = bsk.decomposition_level_count().0;
++  let polynomial_size: usize = bsk.polynomial_size().0;
++  let streaming_size: usize = params.streaming_size;
++  let fourier_polynomial_size: usize = polynomial_size / 2;
++  let num_streaming_chunks: usize = fourier_polynomial_size / streaming_size;
++  let bsk_num_streams: usize = glwe_size * pbs_level * glwe_size * streaming_size;
++  let bsk_num_streams_per_kernel: usize = bsk_num_streams / params.bsk_num_kernels;
++
++  let bsk_size = lwe_dimension * pbs_level * glwe_size * glwe_size * polynomial_size / 2;
++  let bsk_part_size = bsk_size / params.bsk_num_kernels;
++
++  // Assuming Complex is a struct or enum in Rust representing complex numbers
++  // You need to replace Complex with the actual type you are using for complex numbers.
++  fn bit_reverse_perm(v: &[c64], fourier_polynomial_size: usize) -> Vec<c64> {
++    fn bit_reverse(input: usize, n_bits: usize) -> usize {
++      let binary_str = format!("{:0width$b}", input, width = n_bits as usize);
++      let reversed_str: String = binary_str.chars().rev().collect();
++      u32::from_str_radix(&reversed_str, 2).unwrap() as usize
++    }
++
++    let result: Vec<c64> = (0..fourier_polynomial_size)
++      .map(|i| v[bit_reverse(i, f64::log2(fourier_polynomial_size as f64) as usize)])
++      .collect();
++
++    result
++  }
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 1:
++  //
++  // Input:  c64 [lwe_dimension]reversed([pbs_level])[glwe_size][glwe_size][fourier_polynomial_size]
++  // Output: c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  //
++
++  let bsk_reordered: Vec<Vec<Vec<Vec<Vec<c64>>>>> = {
++    // Get All
++    // as [lwe_dimension * glwe_size * pbs_level * glwe_size][fourier_polynomial_size]
++    let bsk_64: Vec<Vec<c64>> = bsk
++      .clone()
++      .data()
++      .chunks(polynomial_size / 2)
++      // the first element should be put at the last position (likely because of different twist twiddles)
++      .map(|v| bit_reverse_perm(v, polynomial_size / 2))
++      .collect();
++
++    // Group by Columns
++    // as [lwe_dimension * glwe_size * pbs_level][glwe_size][fourier_polynomial_size]
++    let bsk_cols: Vec<Vec<Vec<c64>>> = bsk_64.chunks(glwe_size).map(|v| v.to_vec()).collect();
++
++    // Group by Rows
++    // as [lwe_dimension * pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    let bsk_rows: Vec<Vec<Vec<Vec<c64>>>> = bsk_cols.chunks(glwe_size).map(|v| v.to_vec()).collect();
++
++    // Group by Levels
++    // as [lwe_dimension][pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    let bsk_levels: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_rows.chunks(pbs_level).map(|v| v.to_vec()).collect();
++
++    // Reverts Rows
++    // as [lwe_dimension][pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    // Tfhe-rs has the most-significant level first, but we want the least-significant level first
++    let bsk_rev: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_levels.into_iter().map(|v| v.into_iter().rev().collect()).collect();
++
++    // Transpose
++    // as [lwe_dimension][glwe_size][pbs_level][glwe_size][fourier_polynomial_size]
++    let bsk_trps: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_rev
++      .into_iter()
++      .map(|v| {
++        let rows = v.len();
++        let cols = v[0].len();
++        (0..cols)
++          .map(|col| (0..rows).map(|row| v[row][col].clone()).collect())
++          .collect()
++      })
++      .collect();
++
++    bsk_trps
++  };
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 2:
++  //
++  // Input:  c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  // Output: u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  //
++
++  let mut bsk_streams: Vec<Vec<u64>> = vec![
++    vec![u64::default(); glwe_size * pbs_level * glwe_size * streaming_size * 2];
++    lwe_dimension * num_streaming_chunks
++  ];
++
++  fn c64_to_memval(value: c64, bsk_frac_bits: u32) -> (u64, u64) {
++    let factor = 2_u64.pow(bsk_frac_bits as u32);
++    let rounded_re = ((value.re * factor as f64).round() as i64) as u64;
++    let rounded_im = ((value.im * factor as f64).round() as i64) as u64;
++    (rounded_re, rounded_im)
++  }
++
++  for i in 0..lwe_dimension {
++    for j in 0..glwe_size {
++      for k in 0..pbs_level {
++        for l in 0..glwe_size {
++          for n in 0..streaming_size {
++            for m in 0..num_streaming_chunks {
++              let serial = num_streaming_chunks * i + m;
++              let parallel =
++                pbs_level * glwe_size * streaming_size * j + glwe_size * streaming_size * k + streaming_size * l + n;
++
++              (
++                bsk_streams[serial][2 * parallel + 0],
++                bsk_streams[serial][2 * parallel + 1],
++              ) = c64_to_memval(bsk_reordered[i][j][k][l][streaming_size * m + n], params.bsk_frac_bits)
++            }
++          }
++        }
++      }
++    }
++  }
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 3:
++  //
++  // Input:  u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  // Output: Split the "parallel" part of the bsk_streams between params.bsk_num_kernels kernels
++  //
++  //                                       Serial                                    Parallel
++  //                        <-----------------------------------><----------------------------------------------->
++  //   uint64_t bsk_streams[LWE_DIMENSION][NUM_STREAMING_CHUNKS][GLWE_SIZE][PBS_LEVEL][GLWE_SIZE][STREAMING_SIZE][2];
++  //
++
++  let bsk_final_size = lwe_dimension * num_streaming_chunks * glwe_size * pbs_level * glwe_size * streaming_size * 2;
++  let bsk_final_part_size = bsk_final_size / params.bsk_num_kernels;
++
++  assert!(bsk_final_size == bsk_size * 2, "BSK re-oredering is wrong");
++  assert!(bsk_final_part_size == bsk_part_size * 2, "BSK re-oredering is wrong");
++
++  let mut bsk_parts: Vec<Vec<u64>> = vec![vec![u64::default(); bsk_final_part_size]; params.bsk_num_kernels];
++
++  for kernel in 0..params.bsk_num_kernels {
++    let mut cnt = 0;
++
++    for serial in 0..(lwe_dimension * num_streaming_chunks) {
++      for parallel in 0..bsk_num_streams_per_kernel {
++        bsk_parts[kernel][cnt + 0] = bsk_streams[serial][kernel * bsk_num_streams_per_kernel * 2 + 2 * parallel + 0];
++        bsk_parts[kernel][cnt + 1] = bsk_streams[serial][kernel * bsk_num_streams_per_kernel * 2 + 2 * parallel + 1];
++        cnt += 2;
++      }
++    }
++  }
++
++  bsk_parts
++}
++
++pub fn disable_fpga(bootstrapper: &mut Bootstrapper) {
++  unsafe {
++    for fpga_index in 0..bootstrapper.fpga_data.enabled_fpga_count {
++      // Free memories
++      xrtBOFree(bootstrapper.fpga_data.devmem_lwe_in[fpga_index]);
++      xrtBOFree(bootstrapper.fpga_data.devmem_lwe_out[fpga_index]);
++      xrtBOFree(bootstrapper.fpga_data.devmem_ksk[fpga_index]);
++      for devmem in bootstrapper.fpga_data.devmem_bsk[fpga_index].clone() {
++        xrtBOFree(devmem);
++      }
++
++      // Close Runs
++      xrtRunClose(bootstrapper.fpga_data.runHandle_lwe_in[fpga_index]);
++      xrtRunClose(bootstrapper.fpga_data.runHandle_lwe_out[fpga_index]);
++      for run in bootstrapper.fpga_data.runHandle_ksk[fpga_index].clone() {
++        xrtRunClose(run);
++      }
++      for runs in bootstrapper.fpga_data.runHandle_bsk[fpga_index].clone() {
++        for run in runs {
++          xrtRunClose(run);
++        }
++      }
++
++      // Close Kernels
++      xrtKernelClose(bootstrapper.fpga_data.kernelHandle_lwe_in[fpga_index]);
++      xrtKernelClose(bootstrapper.fpga_data.kernelHandle_lwe_out[fpga_index]);
++      xrtKernelClose(bootstrapper.fpga_data.kernelHandle_ksk[fpga_index]);
++      for kernel in bootstrapper.fpga_data.kernelHandle_bsk[fpga_index].clone() {
++        xrtKernelClose(kernel);
++      }
++    }
++  }
++
++  println!("Executed {} operations.", bootstrapper.fpga_data.op_count);
++  bootstrapper.fpga_data.is_fpga_enabled = false;
++}
+diff --git a/tfhe/src/core_crypto/fpga/luts.rs b/tfhe/src/core_crypto/fpga/luts.rs
+new file mode 100644
+index 00000000..8aa05fa5
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/luts.rs
+@@ -0,0 +1,1322 @@
++use crate::shortint::ciphertext::Degree;
++use crate::shortint::server_key::LookupTableOwned;
++use crate::shortint::{MessageModulus, ServerKey};
++use std::cmp::Ordering;
++
++use super::BelfortFpgaLuts;
++
++#[derive(Copy, Clone, Debug)]
++pub struct BelfortLookupTable {
++  pub index: usize,
++  pub degree: Degree,
++}
++
++type LutGenFn = fn(&ServerKey) -> LookupTableOwned;
++
++#[derive(Clone, Debug)]
++struct LUT {
++  index: usize,
++  name: &'static str,
++  lut_generator: LutGenFn,
++}
++
++const IS_INFERIOR: u64 = 0;
++const IS_EQUAL: u64 = 1;
++const IS_SUPERIOR: u64 = 2;
++
++pub(crate) enum OutputCarry {
++  None = 0,
++  Generated = 1,
++  Propagated = 2,
++}
++
++pub(crate) enum BitValue {
++  Zero = 0,
++  One = 1,
++}
++
++const fn overflow_happened(overflow_sum: u64) -> bool {
++  overflow_sum != 0
++}
++
++const fn overflow_did_not_happen(overflow_sum: u64) -> bool {
++  !overflow_happened(overflow_sum)
++}
++
++const LUTS: [LUT; 128] = [
++  LUT {
++    index: 0,
++    name: "gates",
++    lut_generator: |s| s.generate_lookup_table(|_: u64| 1 << 61),
++  },
++  LUT {
++    index: 1,
++    name: "identity",
++    lut_generator: |s| s.generate_lookup_table(|x: u64| x),
++  },
++  LUT {
++    index: 2,
++    name: "msg2_extract",
++    lut_generator: |s| s.generate_lookup_table(|x| x % (s.message_modulus.0 as u64)),
++  },
++  LUT {
++    index: 3,
++    name: "carry2_extract",
++    lut_generator: |s| s.generate_lookup_table(|x| x / (s.message_modulus.0 as u64)),
++  },
++  LUT {
++    index: 4,
++    name: "mult_2lsb",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x, y| (x * y) % (s.message_modulus.0 as u64))
++        .acc
++    },
++  },
++  LUT {
++    index: 5,
++    name: "mult_2msb",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x, y| (x * y) / (s.message_modulus.0 as u64))
++        .acc
++    },
++  },
++  LUT {
++    index: 6,
++    name: "equal_vector",
++    lut_generator: |s| {
++      let equal_vector = [9u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
++      s.generate_lookup_table_vector(&equal_vector)
++    },
++  },
++  LUT {
++    index: 7,
++    name: "equal_10_vector",
++    lut_generator: |s| {
++      let equal_10_vector = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
++      s.generate_lookup_table_vector(&equal_10_vector)
++    },
++  },
++  LUT {
++    index: 8,
++    name: "min_vector",
++    lut_generator: |s| {
++      let min_vector = [0u64, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0].to_vec();
++      s.generate_lookup_table_vector(&min_vector)
++    },
++  },
++  LUT {
++    index: 9,
++    name: "add_2lsb",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| (x + y) % 4).acc,
++  },
++  LUT {
++    index: 10,
++    name: "add_2msb",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| (x + y) / 4).acc,
++  },
++  LUT {
++    index: 11,
++    name: "add",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| (x + y)).acc,
++  },
++  LUT {
++    index: 12,
++    name: "equal_to",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| u64::from(x == y)).acc,
++  },
++  LUT {
++    index: 13,
++    name: "not_equal_to",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| u64::from(x != y)).acc,
++  },
++  LUT {
++    index: 14,
++    name: "is_non_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from(x != 0)),
++  },
++  LUT {
++    index: 15,
++    name: "reduce_two_orderings",
++
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        if msb == 1 {
++          lsb
++        } else {
++          msb
++        }
++      })
++    },
++  },
++  LUT {
++    index: 16,
++    name: "lhs_min_max",
++    lut_generator: |s| s.generate_lookup_table(|x| if x < 4 { x } else { 0 }),
++  },
++  LUT {
++    index: 17,
++    name: "rhs_min_max",
++    lut_generator: |s| s.generate_lookup_table(|x: u64| if x >= 4 { x - 4 } else { 0 }),
++  },
++  LUT {
++    index: 18,
++    name: "comparison_result",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from(x != 0) + 1),
++  },
++  LUT {
++    index: 19,
++    name: "is_equal_to_one",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 1 as u64)),
++  },
++  LUT {
++    index: 20,
++    name: "is_equal_to_two",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 2 as u64)),
++  },
++  LUT {
++    index: 21,
++    name: "is_equal_to_three",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 3 as u64)),
++  },
++  LUT {
++    index: 22,
++    name: "is_equal_to_four",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 4 as u64)),
++  },
++  LUT {
++    index: 23,
++    name: "is_equal_to_five",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 5 as u64)),
++  },
++  LUT {
++    index: 24,
++    name: "is_equal_to_eight",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 8 as u64)),
++  },
++  LUT {
++    index: 25,
++    name: "is_equal_to_nine",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 9 as u64)),
++  },
++  LUT {
++    index: 26,
++    name: "is_equal_to_max",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 15 as u64)),
++  },
++  LUT {
++    index: 27,
++    name: "gt_two_blocks",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        let result = if msb == 1 { lsb } else { msb };
++
++        u64::from(result == IS_SUPERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 28,
++    name: "ge_two_blocks",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        let result = if msb == 1 { lsb } else { msb };
++
++        u64::from(result == IS_SUPERIOR || result == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 29,
++    name: "lt_two_blocks",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        let result = if msb == 1 { lsb } else { msb };
++
++        u64::from(result == IS_INFERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 30,
++    name: "le_two_blocks",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        let result = if msb == 1 { lsb } else { msb };
++
++        u64::from(result == IS_INFERIOR || result == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 31,
++    name: "two_blocks_min_max",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let msb = (x >> 2) & 3;
++        let lsb = x & 3;
++
++        let result = if msb == 1 { lsb } else { msb };
++
++        if result == 0 {
++          s.message_modulus.0 as u64
++        } else {
++          0
++        }
++      })
++    },
++  },
++  LUT {
++    index: 32,
++    name: "gt_one_block",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let result = x % 3;
++
++        u64::from(result == IS_SUPERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 33,
++    name: "ge_one_block",
++
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let result = x % 3;
++
++        u64::from(result == IS_SUPERIOR || result == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 34,
++    name: "lt_one_block",
++
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let result = x % 3;
++
++        u64::from(result == IS_INFERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 35,
++    name: "le_one_block",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let result = x % 3;
++
++        u64::from(result == IS_INFERIOR || result == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 36,
++    name: "one_block_min_max",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let result = x % 3;
++
++        if result == 0 {
++          s.message_modulus.0 as u64
++        } else {
++          0
++        }
++      })
++    },
++  },
++  LUT {
++    index: 37,
++    name: "compare_with_sign_bits",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x: u64, y: u64| {
++        let sign_bit_pos = s.message_modulus.0.ilog2() - 1;
++
++        let x_sign_bit = x >> sign_bit_pos;
++        let y_sign_bit = y >> sign_bit_pos;
++
++        if x_sign_bit == y_sign_bit {
++          match x.cmp(&y) {
++            std::cmp::Ordering::Less => IS_INFERIOR,
++            std::cmp::Ordering::Equal => IS_EQUAL,
++            std::cmp::Ordering::Greater => IS_SUPERIOR,
++          }
++        } else {
++          match x.cmp(&y) {
++            std::cmp::Ordering::Less => IS_SUPERIOR,
++            std::cmp::Ordering::Equal => IS_EQUAL,
++            std::cmp::Ordering::Greater => IS_INFERIOR,
++          }
++        }
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 38,
++    name: "neg",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        if (x % 4) == 0 {
++          3
++        } else if (x % 4) == 1 {
++          2
++        } else if (x % 4) == 2 {
++          1
++        } else {
++          0
++        }
++      })
++    },
++  },
++  LUT {
++    index: 39,
++    name: "msg_bit1_extract",
++    lut_generator: |s| s.generate_lookup_table(|x| (x >> 1) & 1),
++  },
++  LUT {
++    index: 40,
++    name: "msg_bit0_extract",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 1),
++  },
++  LUT {
++    index: 41,
++    name: "msg_bit1_extract_offset2",
++    lut_generator: |s| s.generate_lookup_table(|x| ((x >> 1) & 1) << 2),
++  },
++  LUT {
++    index: 42,
++    name: "msg_bit0_extract_offset2",
++    lut_generator: |s| s.generate_lookup_table(|x| (x & 1) << 2),
++  },
++  LUT {
++    index: 43,
++    name: "mux",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = x & 7;
++        let control_bit = x >> 2;
++        let previous_bit = (x & 2) >> 1;
++        let current_bit = x & 1;
++
++        if control_bit == 1 {
++          previous_bit
++        } else {
++          current_bit
++        }
++      })
++    },
++  },
++  LUT {
++    index: 44,
++    name: "bitand",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| x & y).acc,
++  },
++  LUT {
++    index: 45,
++    name: "bitor",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| x | y).acc,
++  },
++  LUT {
++    index: 46,
++    name: "bitxor",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| x ^ y).acc,
++  },
++  LUT {
++    index: 47,
++    name: "does_block_generate_carry",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        if x >= s.message_modulus.0 as u64 {
++          OutputCarry::Generated as u64
++        } else {
++          OutputCarry::None as u64
++        }
++      })
++    },
++  },
++  LUT {
++    index: 48,
++    name: "does_block_generate_or_propagate",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        if x >= s.message_modulus.0 as u64 {
++          OutputCarry::Generated as u64
++        } else if x == (s.message_modulus.0 as u64 - 1) {
++          OutputCarry::Propagated as u64
++        } else {
++          OutputCarry::None as u64
++        }
++      })
++    },
++  },
++  LUT {
++    index: 49,
++    name: "carry_propagation_sum",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|msb, lsb| {
++        if msb == OutputCarry::Propagated as u64 {
++          lsb
++        } else {
++          msb
++        }
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 50,
++    name: "predicate",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| if y == 1 { 0 } else { x }).acc,
++  },
++  LUT {
++    index: 51,
++    name: "inverted_predicate",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| if y != 1 { 0 } else { x }).acc,
++  },
++  LUT {
++    index: 52,
++    name: "does_block_generate_borrow",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        if x < (s.message_modulus.0 as u64) {
++          OutputCarry::Generated as u64
++        } else {
++          OutputCarry::None as u64
++        }
++      })
++    },
++  },
++  LUT {
++    index: 53,
++    name: "does_block_generate_or_propagate_borrow",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| match x.cmp(&(s.message_modulus.0 as u64)) {
++        Ordering::Less => OutputCarry::Generated as u64,
++        Ordering::Equal => OutputCarry::Propagated as u64,
++        Ordering::Greater => OutputCarry::None as u64,
++      })
++    },
++  },
++  LUT {
++    index: 54,
++    name: "msg_bit0_overflow_flag",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x: u64, y: u64| u64::from(x == 0 && y == 0))
++        .acc
++    },
++  },
++  LUT {
++    index: 55,
++    name: "msg_bit1_overflow_flag",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x: u64, y: u64| u64::from(x == 0 && y == 0) << 1)
++        .acc
++    },
++  },
++  LUT {
++    index: 56,
++    name: "is_mod_equal_to_zero",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| u64::from(x % (s.message_modulus.0 * s.carry_modulus.0 - 1) as u64 == 0))
++    },
++  },
++  LUT {
++    index: 57,
++    name: "is_mod_not_equal_to_zero",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| u64::from(x % (s.message_modulus.0 * s.carry_modulus.0 - 1) as u64 != 0))
++    },
++  },
++  LUT {
++    index: 58,
++    name: "zero_out_if_overflow_did_not_happen_with_f1",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_did_not_happen(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(1),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 59,
++    name: "zero_out_if_overflow_did_not_happen_with_f2",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_did_not_happen(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(2),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 60,
++    name: "zero_out_if_overflow_did_not_happen_with_f3",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_did_not_happen(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(3),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 61,
++    name: "zero_out_if_overflow_happened_with_f1",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_happened(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(1),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 62,
++    name: "zero_out_if_overflow_happened_with_f2",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_happened(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(2),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 63,
++    name: "zero_out_if_overflow_happened_with_f3",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate_with_factor(
++        |block: u64, overflow_sum| {
++          if overflow_happened(overflow_sum) {
++            0
++          } else {
++            block
++          }
++        },
++        MessageModulus(3),
++      )
++      .acc
++    },
++  },
++  LUT {
++    index: 64,
++    name: "last_block_swb0",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let message_modulus = s.message_modulus.0 as u64;
++        let num_bits_in_block = s.message_modulus.0.ilog2() as u64;
++        let shift_within_block = 0;
++
++        let x = x % s.message_modulus.0 as u64;
++        let x_sign_bit = x >> (s.message_modulus.0.ilog2() as u64 - 1) & 1;
++        let shifted = x >> shift_within_block;
++
++        let mut padding = (message_modulus - 1) * x_sign_bit;
++
++        padding <<= num_bits_in_block - shift_within_block;
++        padding %= message_modulus;
++
++        shifted | padding
++      })
++    },
++  },
++  LUT {
++    index: 65,
++    name: "last_block_swb1",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let message_modulus = s.message_modulus.0 as u64;
++        let num_bits_in_block = s.message_modulus.0.ilog2() as u64;
++        let shift_within_block = 1;
++
++        let x = x % s.message_modulus.0 as u64;
++        let x_sign_bit = x >> (s.message_modulus.0.ilog2() as u64 - 1) & 1;
++        let shifted = x >> shift_within_block;
++
++        let mut padding = (message_modulus - 1) * x_sign_bit;
++
++        padding <<= num_bits_in_block - shift_within_block;
++        padding %= message_modulus;
++
++        shifted | padding
++      })
++    },
++  },
++  LUT {
++    index: 66,
++    name: "pad_block_creator",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let message_modulus = s.message_modulus.0 as u64;
++        let num_bits_in_block = s.message_modulus.0.ilog2() as u64;
++
++        let x = x % message_modulus;
++        let x_sign_bit = x >> (num_bits_in_block - 1) & 1;
++
++        (message_modulus - 1) * x_sign_bit
++      })
++    },
++  },
++  LUT {
++    index: 67,
++    name: "shift_and_propagate_swb0",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|current_block, mut next_block| {
++        let message_modulus = s.message_modulus.0 as u64;
++        let num_bits_in_block = message_modulus.ilog2() as u64;
++        let shift_within_block = 0;
++
++        next_block <<= num_bits_in_block;
++        next_block >>= shift_within_block;
++
++        let message_of_current_block = current_block >> shift_within_block;
++        let carry_of_previous_block = next_block % message_modulus;
++
++        message_of_current_block + carry_of_previous_block
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 68,
++    name: "shift_and_propagate_swb1",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|current_block, mut next_block| {
++        // left shift so as not to lose
++        // bits when shifting right afterwards
++        let message_modulus = s.message_modulus.0 as u64;
++        let num_bits_in_block = message_modulus.ilog2() as u64;
++        let shift_within_block = 1;
++
++        next_block <<= num_bits_in_block;
++        next_block >>= shift_within_block;
++
++        // The way of getting carry / message is reversed compared
++        // to the usual way but its normal:
++        // The message is in the upper bits, the carry in lower bits
++        let message_of_current_block = current_block >> shift_within_block;
++        let carry_of_previous_block = next_block % message_modulus;
++
++        message_of_current_block + carry_of_previous_block
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 69,
++    name: "create_blocks_swb1",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|previous_block, current_block| {
++        let message_modulus = s.message_modulus.0 as u64;
++        let shift_within_block = 1;
++
++        let current_block = current_block << shift_within_block;
++        let previous_block = previous_block << shift_within_block;
++
++        let message_of_current_block = current_block % message_modulus;
++        let carry_of_previous_block = previous_block / message_modulus;
++        message_of_current_block + carry_of_previous_block
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 70,
++    name: "shift1_mod",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let modulus = s.message_modulus.0 as u64;
++        (x << 1) % modulus
++      })
++    },
++  },
++  LUT {
++    index: 71,
++    name: "masking_lut_bit1",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 2),
++  },
++  LUT {
++    index: 72,
++    name: "right_shift_1",
++    lut_generator: |s| s.generate_lookup_table(|x| x >> 1),
++  },
++  LUT {
++    index: 73,
++    name: "is_equal_to_scalar_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 0 as u64)),
++  },
++  LUT {
++    index: 74,
++    name: "is_equal_to_scalar_six",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 6 as u64)),
++  },
++  LUT {
++    index: 75,
++    name: "is_equal_to_scalar_seven",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 7 as u64)),
++  },
++  LUT {
++    index: 76,
++    name: "is_equal_to_scalar_ten",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 10 as u64)),
++  },
++  LUT {
++    index: 77,
++    name: "is_equal_to_scalar_eleven",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 11 as u64)),
++  },
++  LUT {
++    index: 78,
++    name: "is_equal_to_scalar_twelve",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 12 as u64)),
++  },
++  LUT {
++    index: 79,
++    name: "is_equal_to_scalar_thirteen",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 13 as u64)),
++  },
++  LUT {
++    index: 80,
++    name: "is_equal_to_scalar_fourteen",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) == 14 as u64)),
++  },
++  LUT {
++    index: 81,
++    name: "is_not_equal_to_scalar_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 0 as u64)),
++  },
++  LUT {
++    index: 82,
++    name: "is_not_equal_to_scalar_one",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 1 as u64)),
++  },
++  LUT {
++    index: 83,
++    name: "is_not_equal_to_scalar_two",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 2 as u64)),
++  },
++  LUT {
++    index: 84,
++    name: "is_not_equal_to_scalar_three",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 3 as u64)),
++  },
++  LUT {
++    index: 85,
++    name: "is_not_equal_to_scalar_four",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 4 as u64)),
++  },
++  LUT {
++    index: 86,
++    name: "is_not_equal_to_scalar_five",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 5 as u64)),
++  },
++  LUT {
++    index: 87,
++    name: "is_not_equal_to_scalar_six",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 6 as u64)),
++  },
++  LUT {
++    index: 88,
++    name: "is_not_equal_to_scalar_seven",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 7 as u64)),
++  },
++  LUT {
++    index: 89,
++    name: "is_not_equal_to_scalar_eight",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 8 as u64)),
++  },
++  LUT {
++    index: 90,
++    name: "is_not_equal_to_scalar_nine",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 9 as u64)),
++  },
++  LUT {
++    index: 91,
++    name: "is_not_equal_to_scalar_ten",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 10 as u64)),
++  },
++  LUT {
++    index: 92,
++    name: "is_not_equal_to_scalar_eleven",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 11 as u64)),
++  },
++  LUT {
++    index: 93,
++    name: "is_not_equal_to_scalar_twelve",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 12 as u64)),
++  },
++  LUT {
++    index: 94,
++    name: "is_not_equal_to_scalar_thirteen",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 13 as u64)),
++  },
++  LUT {
++    index: 95,
++    name: "is_not_equal_to_scalar_fourteen",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 14 as u64)),
++  },
++  LUT {
++    index: 96,
++    name: "is_not_equal_to_scalar_max",
++    lut_generator: |s| s.generate_lookup_table(|x| u64::from((x & 15 as u64) != 15 as u64)),
++  },
++  LUT {
++    index: 97,
++    name: "scalar_bitand_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 0),
++  },
++  LUT {
++    index: 98,
++    name: "scalar_bitand_one",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 1),
++  },
++  LUT {
++    index: 99,
++    name: "scalar_bitand_two",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 2),
++  },
++  LUT {
++    index: 100,
++    name: "scalar_bitand_three",
++    lut_generator: |s| s.generate_lookup_table(|x| x & 3),
++  },
++  LUT {
++    index: 101,
++    name: "scalar_bitor_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| x | 0),
++  },
++  LUT {
++    index: 102,
++    name: "scalar_bitor_one",
++    lut_generator: |s| s.generate_lookup_table(|x| x | 1),
++  },
++  LUT {
++    index: 103,
++    name: "scalar_bitor_two",
++    lut_generator: |s| s.generate_lookup_table(|x| x | 2),
++  },
++  LUT {
++    index: 104,
++    name: "scalar_bitor_three",
++    lut_generator: |s| s.generate_lookup_table(|x| x | 3),
++  },
++  LUT {
++    index: 105,
++    name: "scalar_bitxor_zero",
++    lut_generator: |s| s.generate_lookup_table(|x| x ^ 0),
++  },
++  LUT {
++    index: 106,
++    name: "scalar_bitxor_one",
++    lut_generator: |s| s.generate_lookup_table(|x| x ^ 1),
++  },
++  LUT {
++    index: 107,
++    name: "scalar_bitxor_two",
++    lut_generator: |s| s.generate_lookup_table(|x| x ^ 2),
++  },
++  LUT {
++    index: 108,
++    name: "scalar_bitxor_three",
++    lut_generator: |s| s.generate_lookup_table(|x| x ^ 3),
++  },
++  LUT {
++    index: 109,
++    name: "sign_bit_is_set",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let sign_bit_pos = s.message_modulus.0.ilog2() - 1;
++        let sign_bit_is_set = 1;
++        let x = x % s.message_modulus.0 as u64;
++        let numerator_sign_bit_is_set = (x >> sign_bit_pos) & 1;
++        let numerator_and_divisor_sign_differs = numerator_sign_bit_is_set != sign_bit_is_set;
++
++        if numerator_and_divisor_sign_differs {
++          s.message_modulus.0 as u64 - 1
++        } else {
++          0
++        }
++      })
++    },
++  },
++  LUT {
++    index: 110,
++    name: "sign_bit_is_not_set",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let sign_bit_pos = s.message_modulus.0.ilog2() - 1;
++        let sign_bit_is_set = 0;
++        let x = x % s.message_modulus.0 as u64;
++        let numerator_sign_bit_is_set = (x >> sign_bit_pos) & 1;
++        let numerator_and_divisor_sign_differs = numerator_sign_bit_is_set != sign_bit_is_set;
++
++        if numerator_and_divisor_sign_differs {
++          s.message_modulus.0 as u64 - 1
++        } else {
++          0
++        }
++      })
++    },
++  },
++  LUT {
++    index: 111,
++    name: "two_blocks_gt_scalar",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|lsb, msb| {
++        let msb = if msb == 1 { IS_EQUAL } else { IS_SUPERIOR };
++
++        let x = (msb << 2) + lsb;
++
++        let m = (x >> 2) & 3;
++        let l = x & 3;
++
++        let final_sign = if m == IS_EQUAL { l } else { m };
++
++        u64::from(final_sign == IS_SUPERIOR)
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 112,
++    name: "two_blocks_ge_scalar",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|lsb, msb| {
++        let msb = if msb == 1 { IS_EQUAL } else { IS_SUPERIOR };
++
++        let x = (msb << 2) + lsb;
++
++        let m = (x >> 2) & 3;
++        let l = x & 3;
++
++        let final_sign = if m == IS_EQUAL { l } else { m };
++
++        u64::from(final_sign == IS_SUPERIOR || final_sign == IS_EQUAL)
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 113,
++    name: "two_blocks_lt_scalar",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|lsb, msb| {
++        let msb = if msb == 1 { IS_EQUAL } else { IS_SUPERIOR };
++
++        let x = (msb << 2) + lsb;
++
++        let m = (x >> 2) & 3;
++        let l = x & 3;
++
++        let final_sign = if m == IS_EQUAL { l } else { m };
++
++        u64::from(final_sign == IS_INFERIOR)
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 114,
++    name: "two_blocks_le_scalar",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|lsb, msb| {
++        let msb = if msb == 1 { IS_EQUAL } else { IS_SUPERIOR };
++
++        let x = (msb << 2) + lsb;
++
++        let m = (x >> 2) & 3;
++        let l = x & 3;
++
++        let final_sign = if m == IS_EQUAL { l } else { m };
++
++        u64::from(final_sign == IS_INFERIOR || final_sign == IS_EQUAL)
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 115,
++    name: "two_blocks_scalar_general",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|lsb, msb| {
++        let msb = if msb == 1 { IS_EQUAL } else { IS_SUPERIOR };
++
++        let x = (msb << 2) + lsb;
++        let m = (x >> 2) & 3;
++        let l = x & 3;
++
++        if m == IS_EQUAL {
++          l
++        } else {
++          m
++        }
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 116,
++    name: "one_block_scalar_gt",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = if x == 1 { IS_EQUAL } else { IS_SUPERIOR };
++        u64::from(x == IS_SUPERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 117,
++    name: "one_block_scalar_ge",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = if x == 1 { IS_EQUAL } else { IS_SUPERIOR };
++        u64::from(x == IS_SUPERIOR || x == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 118,
++    name: "one_block_scalar_lt",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = if x == 1 { IS_EQUAL } else { IS_SUPERIOR };
++        u64::from(x == IS_INFERIOR)
++      })
++    },
++  },
++  LUT {
++    index: 119,
++    name: "one_block_scalar_le",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = if x == 1 { IS_EQUAL } else { IS_SUPERIOR };
++        u64::from(x == IS_INFERIOR || x == IS_EQUAL)
++      })
++    },
++  },
++  LUT {
++    index: 120,
++    name: "one_block_scalar_general",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = if x == 1 { IS_EQUAL } else { IS_SUPERIOR };
++        x
++      })
++    },
++  },
++  LUT {
++    index: 121,
++    name: "trailing_bits_one",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = x % s.message_modulus.0 as u64;
++
++        let mut count = 0;
++        for i in 0..s.message_modulus.0.ilog2() {
++          if (x >> i) & 1 == BitValue::Zero as u64 {
++            break;
++          }
++          count += 1;
++        }
++        count
++      })
++    },
++  },
++  LUT {
++    index: 122,
++    name: "trailing_bits_zero",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = x % s.message_modulus.0 as u64;
++
++        let mut count = 0;
++        for i in 0..s.message_modulus.0.ilog2() {
++          if (x >> i) & 1 == BitValue::One as u64 {
++            break;
++          }
++          count += 1;
++        }
++        count
++      })
++    },
++  },
++  LUT {
++    index: 123,
++    name: "leading_bits_one",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = x % s.message_modulus.0 as u64;
++
++        let mut count = 0;
++        for i in (0..s.message_modulus.0.ilog2()).rev() {
++          if (x >> i) & 1 == BitValue::Zero as u64 {
++            break;
++          }
++          count += 1;
++        }
++        count
++      })
++    },
++  },
++  LUT {
++    index: 124,
++    name: "leading_bits_zero",
++    lut_generator: |s| {
++      s.generate_lookup_table(|x| {
++        let x = x % s.message_modulus.0 as u64;
++
++        let mut count = 0;
++        for i in (0..s.message_modulus.0.ilog2()).rev() {
++          if (x >> i) & 1 == BitValue::One as u64 {
++            break;
++          }
++          count += 1;
++        }
++        count
++      })
++    },
++  },
++  LUT {
++    index: 125,
++    name: "trailing_bits_sum",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|block_num_bit_count, more_significant_block_bit_count| {
++        if more_significant_block_bit_count == (s.message_modulus.0.ilog2() as u64) {
++          block_num_bit_count
++        } else {
++          0
++        }
++      })
++      .acc
++    },
++  },
++  LUT {
++    index: 126,
++    name: "carry_generation",
++    lut_generator: |s| s.generate_lookup_table_bivariate(|x, y| ((x + y) >= 3) as u64).acc,
++  },
++  LUT {
++    index: 127,
++    name: "sum",
++    lut_generator: |s| {
++      s.generate_lookup_table_bivariate(|x, y| {
++        let s = (x + (u64::MAX - 3) * ((x == 3) as u64)) as i64;
++        let c = y as i64;
++        ((c + s) as u64) % 4
++      })
++      .acc
++    },
++  },
++];
++
++impl BelfortFpgaLuts {
++  pub fn lut_count() -> usize {
++    LUTS.len()
++  }
++
++  pub fn lut_by_name(name: &str, server_key: &ServerKey) -> BelfortLookupTable {
++    for l in &LUTS {
++      if l.name == name {
++        let belfort_lut = BelfortLookupTable {
++          index: l.index,
++          degree: (l.lut_generator)(server_key).degree,
++        };
++        return belfort_lut;
++      }
++    }
++    panic!("LUT [name {}] not found", name);
++  }
++
++  pub fn lut_by_index(index: usize, server_key: &ServerKey) -> BelfortLookupTable {
++    for l in &LUTS {
++      if l.index == index {
++        let belfort_lut = BelfortLookupTable {
++          index: l.index,
++          degree: (l.lut_generator)(server_key).degree,
++        };
++        return belfort_lut;
++      }
++    }
++    panic!("LUT [index {}] not found", index);
++  }
++
++  pub fn boolean_lut() -> BelfortLookupTable {
++    let name = "gates";
++    for l in &LUTS {
++      if l.name == name {
++        let belfort_lut = BelfortLookupTable {
++          index: l.index,
++          degree: Degree::new(0),
++        };
++        return belfort_lut;
++      }
++    }
++    panic!("LUT [name {}] not found", name);
++  }
++
++  pub fn name_by_index(lut_index: usize) -> String {
++    for l in &LUTS {
++      if l.index == lut_index {
++        return l.name.to_string();
++      }
++    }
++    panic!("LUT [index {}] not found", lut_index);
++  }
++
++  pub fn lut_generator_by_index(index: usize) -> LutGenFn {
++    for l in &LUTS {
++      if l.index == index {
++        return l.lut_generator;
++      }
++    }
++    panic!("LUT [index {}] not found", index);
++  }
++}
+diff --git a/tfhe/src/core_crypto/fpga/shortint/accelerators.rs b/tfhe/src/core_crypto/fpga/shortint/accelerators.rs
+new file mode 100644
+index 00000000..58b9210b
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/shortint/accelerators.rs
+@@ -0,0 +1,29 @@
++////////////////////////////////////////////////////////////////////////////////
++// The list of FPGA devices-indexes that are going to be used.
++// If multiple are selected, then the code will run multi-fpga.
++
++pub const MAX_FPGA_COUNT: usize = 1;
++
++////////////////////////////////////////////////////////////////////////////////
++
++// pub const PARAM_MESSAGE_2_CARRY_2: FpgaParameters = FpgaParameters {
++//   base_params: crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2,
++//   fpga_image: "/home/wout/test_LUT/PARAM_MESSAGE_2_CARRY_2_wLUTS_8KSK_u280/accel.xclbin",
++//   batch_size: 8,
++//   streaming_size: 8,
++//   bsk_num_kernels: 4,
++//   ksk_num_kernels: 8,
++//   bsk_frac_bits: 46,
++//   ksk_bits: 34,
++// };
++
++pub const PARAM_MESSAGE_2_CARRY_2: FpgaParameters = FpgaParameters {
++  base_params: crate::shortint::parameters::PARAM_MESSAGE_2_CARRY_2,
++  fpga_image: "/home/wout/PARAM_MESSAGE_2_CARRY_2_4BK_LargeFifo_u280/accel.xclbin",
++  batch_size: 8,
++  streaming_size: 8,
++  bsk_num_kernels: 4,
++  ksk_num_kernels: 4,
++  bsk_frac_bits: 46,
++  ksk_bits: 34,
++};
+\ No newline at end of file
+diff --git a/tfhe/src/core_crypto/fpga/shortint/mod.rs b/tfhe/src/core_crypto/fpga/shortint/mod.rs
+new file mode 100644
+index 00000000..8340eba7
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/shortint/mod.rs
+@@ -0,0 +1,111 @@
++pub mod keyswitch_bootstrap;
++pub mod parameters;
++pub mod utils;
++
++use std::os::raw::c_void;
++
++// use crate::core_crypto::fpga::shortint::parameters::FpgaParameters;
++use crate::core_crypto::fpga::shortint::parameters::*;
++// use crate::shortint::parameters::ClassicPBSParameters;
++
++use crate::shortint::prelude::*;
++use crate::shortint::server_key::ShortintBootstrappingKey;
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub const MAX_FPGA_COUNT: usize = crate::core_crypto::fpga::shortint::parameters::MAX_FPGA_COUNT;
++
++////////////////////////////////////////////////////////////////////////////////
++
++#[derive(Clone)]
++pub struct BelfortFpgaUtils {
++  pub params: FpgaParameters,
++  pub xclbin_uuid: Vec<u8>,
++  pub fpga_device: Vec<*mut c_void>,
++  pub kernelhandle_lwe_in: Vec<*mut c_void>,
++  pub kernelhandle_lwe_out: Vec<*mut c_void>,
++  pub kernelhandle_ksk: Vec<Vec<*mut c_void>>,
++  pub kernelhandle_bsk: Vec<Vec<*mut c_void>>,
++  pub devmem_lwe_in: Vec<*mut c_void>,
++  pub devmem_lwe_out: Vec<*mut c_void>,
++  pub devmem_ksk: Vec<Vec<*mut c_void>>,
++  pub devmem_bsk: Vec<Vec<*mut c_void>>,
++  pub runhandle_lwe_in: Vec<*mut c_void>,
++  pub runhandle_lwe_out: Vec<*mut c_void>,
++  pub runhandle_ksk: Vec<Vec<Vec<*mut c_void>>>,
++  pub runhandle_bsk: Vec<Vec<Vec<*mut c_void>>>,
++  pub enabled_fpga_count: usize,
++  pub is_connected: bool,
++}
++
++impl BelfortFpgaUtils {
++  pub fn default() -> Self {
++    Self {
++      params: FpgaParameters::default(),
++      xclbin_uuid: Vec::new(),
++      fpga_device: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelhandle_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelhandle_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelhandle_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      kernelhandle_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      devmem_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      runhandle_lwe_in: Vec::with_capacity(MAX_FPGA_COUNT),
++      runhandle_lwe_out: Vec::with_capacity(MAX_FPGA_COUNT),
++      runhandle_ksk: Vec::with_capacity(MAX_FPGA_COUNT),
++      runhandle_bsk: Vec::with_capacity(MAX_FPGA_COUNT),
++      enabled_fpga_count: 0,
++      is_connected: false,
++    }
++  }
++
++  pub fn new(base_params: ClassicPBSParameters) -> Self {
++    let mut default = Self::default();
++    default.params = FpgaParameters::from(base_params);
++    default
++  }
++
++  pub fn connect(&mut self, cpu_key: ServerKey, fpga_count: usize) {
++    let bootstrapping_key = cpu_key.bootstrapping_key;
++    let key_switching_key = cpu_key.key_switching_key;
++
++    let bsk = match bootstrapping_key {
++      ShortintBootstrappingKey::Classic(flbko) => flbko,
++      ShortintBootstrappingKey::MultiBit { .. } => {
++        panic!("Multibit BSK is not supported in FPGA!")
++      }
++    };
++
++    let ksk = key_switching_key;
++
++    utils::enable_fpga(self, bsk, ksk, fpga_count);
++
++    // println!("Connected to FPGA: {}", self.is_connected);
++  }
++
++  pub fn disconnect(&mut self) {
++    utils::disable_fpga(self);
++
++    // println!("Connected to FPGA: {}", self.is_connected);
++  }
++
++  pub fn keyswitch_bootstrap_packed(
++    &self,
++    server_key: &ServerKey,
++    ciphertexts: Vec<&Ciphertext>,
++    lut_indexes: Vec<usize>,
++  ) -> Vec<Ciphertext> {
++    keyswitch_bootstrap::keyswitch_bootstrap_packed(self, &server_key, ciphertexts, lut_indexes)
++  }
++
++  pub fn keyswitch_bootstrap_packed_assign(
++    &self,
++    server_key: &ServerKey,
++    ciphertexts: &mut Vec<&mut Ciphertext>,
++    lut_indexes: Vec<usize>,
++  ) {
++    keyswitch_bootstrap::keyswitch_bootstrap_packed_assign(self, &server_key, ciphertexts, lut_indexes);
++  }
++}
+diff --git a/tfhe/src/core_crypto/fpga/shortint/utils.rs b/tfhe/src/core_crypto/fpga/shortint/utils.rs
+new file mode 100644
+index 00000000..662b4db2
+--- /dev/null
++++ b/tfhe/src/core_crypto/fpga/shortint/utils.rs
+@@ -0,0 +1,628 @@
++#![allow(non_upper_case_globals)]
++#![allow(non_camel_case_types)]
++#![allow(non_snake_case)]
++// Supress not FFI-safe warning
++#![allow(improper_ctypes)]
++#![allow(dead_code)]
++
++include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
++
++use crate::core_crypto::fpga::shortint::parameters::*;
++use crate::core_crypto::fpga::shortint::BelfortFpgaUtils;
++use crate::core_crypto::prelude::*;
++
++use std::ffi::CString;
++use std::mem;
++use std::os::raw::c_void;
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub const MAX_FPGA_COUNT: usize = crate::core_crypto::fpga::shortint::parameters::MAX_FPGA_COUNT;
++
++pub const MAX_BATCH_COUNT: usize = 64;
++//
++// This is used for preallocating MAX_BATCH_COUNT times memories and runhandles
++// for ksk and bsk. These are kind of reservations, that will be re-used
++// later at run time, executing bootstraps. We do the reservation in
++// enable_fpga() function, rather than at re-initialising them each time
++// the bootstrap needs it, for cutting the interfacing overheads.
++
++////////////////////////////////////////////////////////////////////////////////
++
++pub fn enable_fpga(
++  key: &mut BelfortFpgaUtils,
++  bsk: FourierLweBootstrapKeyOwned,
++  ksk: LweKeyswitchKey<Vec<u64>>,
++  fpga_count: usize,
++) {
++  // println!("Connecting to FPGA...");
++
++  if !key.is_connected {
++    let lwe_dimension = key.params.lwe_dimension.0;
++    let glwe_dimension = key.params.glwe_dimension.0;
++    let polynomial_size = key.params.polynomial_size.0;
++    let ks_level = key.params.ks_level.0;
++    let batch_size = key.params.batch_size;
++    let bsk_num_kernels = key.params.bsk_num_kernels;
++    let ksk_num_kernels = key.params.ksk_num_kernels;
++    let ks_num_streams = 2 * key.params.streaming_size * key.params.glwe_dimension.0;
++
++    unsafe {
++      //////////////////////////////////////////////////////////////////////////
++      // program FPGA
++
++      for fpga_index in 0..fpga_count {
++        // get FPGA handle
++        key.fpga_device.push(xrtDeviceOpen(fpga_index as u32));
++
++        // program FPGA with xclbin container
++        let xclbin_file = CString::new(key.params.fpga_image).unwrap();
++        xrtDeviceLoadXclbinFile(key.fpga_device[fpga_index], xclbin_file.as_ptr());
++
++        // get the laoded xclbin UUID (Universally Unique IDentifier)
++        let mut xclbin_uuid = vec![0u8; 16];
++        xrtDeviceGetXclbinUUID(key.fpga_device[fpga_index], xclbin_uuid.as_mut_ptr());
++
++        key.xclbin_uuid = xclbin_uuid.clone();
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // create kernel handles
++
++      for fpga_index in 0..fpga_count {
++        key.kernelhandle_lwe_in.push({
++          let kernel_name = CString::new("ks_lwe_in").unwrap();
++          xrtPLKernelOpenExclusive(
++            key.fpga_device[fpga_index],
++            key.xclbin_uuid.as_mut_ptr(),
++            kernel_name.as_ptr(),
++          )
++        });
++
++        key.kernelhandle_lwe_out.push({
++          let kernel_name = CString::new("pbs_lwe_out").unwrap();
++          xrtPLKernelOpenExclusive(
++            key.fpga_device[fpga_index],
++            key.xclbin_uuid.as_mut_ptr(),
++            kernel_name.as_ptr(),
++          )
++        });
++
++        key.kernelhandle_ksk.push({
++          let mut kernelhandle_ksk: Vec<*mut c_void> = Vec::new();
++
++          for ksk_kernel_index in 0..ksk_num_kernels {
++            let kernel_name = CString::new(format!("ksk:{{ksk_{}}}", ksk_kernel_index + 1)).unwrap();
++            kernelhandle_ksk.push(xrtPLKernelOpenExclusive(
++              key.fpga_device[fpga_index],
++              key.xclbin_uuid.as_mut_ptr(),
++              kernel_name.as_ptr(),
++            ));
++          }
++          kernelhandle_ksk
++        });
++
++        key.kernelhandle_bsk.push({
++          let mut kernelhandle_bsk: Vec<*mut c_void> = Vec::new();
++
++          for bsk_kernel_index in 0..bsk_num_kernels {
++            let kernel_name = CString::new(format!("bsk:{{bsk_{}}}", bsk_kernel_index + 1)).unwrap();
++            kernelhandle_bsk.push(xrtPLKernelOpenExclusive(
++              key.fpga_device[fpga_index],
++              key.xclbin_uuid.as_mut_ptr(),
++              kernel_name.as_ptr(),
++            ));
++          }
++          kernelhandle_bsk
++        });
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // allocate memories in device memory (FPGA memory: DDR/HBM)
++
++      let lwe_in_size = polynomial_size * glwe_dimension + ks_num_streams; // This is padded (aligned) size
++      let lwe_out_size = polynomial_size * glwe_dimension + 16; // This is padded (aligned) size
++      let ksk_part_size = {
++        let ksk_size = (lwe_dimension + 1) * glwe_dimension * polynomial_size * ks_level;
++        ksk_size / ksk_num_kernels
++      };
++      let bsk_part_size = {
++        let lwe_dimension = bsk.input_lwe_dimension().0;
++        let glwe_size = bsk.glwe_size().0;
++        let pbs_level = bsk.decomposition_level_count().0;
++        let polynomial_size = bsk.polynomial_size().0;
++        let bsk_size = lwe_dimension * pbs_level * glwe_size * glwe_size * polynomial_size / 2;
++        bsk_size / bsk_num_kernels * 2
++      };
++
++      let devmem_lwe_in_size = lwe_in_size * batch_size * MAX_BATCH_COUNT * mem::size_of::<u32>();
++      let devmem_lwe_out_size = lwe_out_size * batch_size * MAX_BATCH_COUNT * mem::size_of::<u32>();
++      let devmem_ksk_part_size = ksk_part_size * mem::size_of::<u64>();
++      let devmem_bsk_part_size = bsk_part_size * mem::size_of::<u64>();
++
++      // Allocate the memories
++
++      for fpga_index in 0..fpga_count {
++        key.devmem_lwe_in.push({
++          let kernelArg_lwe_in_grp_0 = xrtKernelArgGroupId(key.kernelhandle_lwe_in[fpga_index], 0) as u32;
++
++          xrtBOAlloc(
++            key.fpga_device[fpga_index],
++            devmem_lwe_in_size,
++            0u64,
++            kernelArg_lwe_in_grp_0,
++          )
++        });
++
++        key.devmem_lwe_out.push({
++          let kernelArg_lwe_out_grp_0 = xrtKernelArgGroupId(key.kernelhandle_lwe_out[fpga_index], 0) as u32;
++
++          xrtBOAlloc(
++            key.fpga_device[fpga_index],
++            devmem_lwe_out_size,
++            0u64,
++            kernelArg_lwe_out_grp_0,
++          )
++        });
++
++        key.devmem_ksk.push({
++          let mut devmem_ksk: Vec<*mut c_void> = Vec::new();
++          for handle in key.kernelhandle_ksk[fpga_index].iter() {
++            let kernelArg_groupId = xrtKernelArgGroupId(*handle, 0) as u32;
++            devmem_ksk.push(xrtBOAlloc(
++              key.fpga_device[fpga_index],
++              devmem_ksk_part_size,
++              0u64,
++              kernelArg_groupId,
++            ));
++          }
++          devmem_ksk
++        });
++
++        key.devmem_bsk.push({
++          let mut devmem_bsk: Vec<*mut c_void> = Vec::new();
++          for handle in key.kernelhandle_bsk[fpga_index].iter() {
++            let kernelArg_groupId = xrtKernelArgGroupId(*handle, 0) as u32;
++            devmem_bsk.push(xrtBOAlloc(
++              key.fpga_device[fpga_index],
++              devmem_bsk_part_size,
++              0u64,
++              kernelArg_groupId,
++            ));
++          }
++          devmem_bsk
++        });
++      }
++
++      ////////////////////////////////////////////////////////////////////////
++      // create run handles: which are specific to one execution of a kernel;
++      // creates handles but not starts the kernels
++
++      for fpga_index in 0..fpga_count {
++        // Lwe In handles
++        key
++          .runhandle_lwe_in
++          .push(xrtRunOpen(key.kernelhandle_lwe_in[fpga_index]));
++        // Lwe Out handles
++        key
++          .runhandle_lwe_out
++          .push(xrtRunOpen(key.kernelhandle_lwe_out[fpga_index]));
++
++        let mut runhandle_ksk: Vec<Vec<*mut c_void>> = Vec::new();
++        let mut runhandle_bsk: Vec<Vec<*mut c_void>> = Vec::new();
++        for _ in 0..MAX_BATCH_COUNT {
++          // KSK handles
++          runhandle_ksk.push({
++            let ksk_handles: Vec<*mut c_void> = key.kernelhandle_ksk[fpga_index]
++              .iter()
++              .map(|handle| xrtRunOpen(*handle))
++              .collect();
++            ksk_handles
++          });
++
++          // BSK handles
++          runhandle_bsk.push({
++            let bsk_handles: Vec<*mut c_void> = key.kernelhandle_bsk[fpga_index]
++              .iter()
++              .map(|handle| xrtRunOpen(*handle))
++              .collect();
++            bsk_handles
++          });
++        }
++
++        key.runhandle_ksk.push(runhandle_ksk);
++        key.runhandle_bsk.push(runhandle_bsk);
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // set devmem related run arguments already here
++
++      for fpga_index in 0..fpga_count {
++        xrtRunSetArg(key.runhandle_lwe_in[fpga_index], 0, key.devmem_lwe_in[fpga_index]);
++
++        xrtRunSetArg(key.runhandle_lwe_out[fpga_index], 0, key.devmem_lwe_out[fpga_index]);
++
++        for batch_index in 0..MAX_BATCH_COUNT {
++          for (handle_index, handle) in key.runhandle_ksk[fpga_index][batch_index].iter().enumerate() {
++            xrtRunSetArg(*handle, 0, key.devmem_ksk[fpga_index][handle_index]);
++          }
++          for (handle_index, handle) in key.runhandle_bsk[fpga_index][batch_index].iter().enumerate() {
++            xrtRunSetArg(*handle, 0, key.devmem_bsk[fpga_index][handle_index]);
++          }
++        }
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // transfer the ksk to FPGA memory
++
++      let ksk_reordered: Vec<Vec<u64>> = ksk_reorder(ksk, &key.params);
++
++      assert!(ksk_part_size == ksk_reordered[0].len(), "KSK re-oredering was wrong");
++      assert!(ksk_num_kernels == ksk_reordered.len(), "KSK re-oredering was wrong");
++
++      for fpga_index in 0..fpga_count {
++        for kernel in 0..ksk_num_kernels {
++          // at the transfer of each part;
++          //   1. allocate 4K aligned host-memory
++          //   2. copy the part to that memory
++          //   3. transfer the data from aligned host-memory to device-memory
++
++          use std::alloc::{alloc, dealloc, Layout};
++
++          let ksk_layout = Layout::from_size_align(devmem_ksk_part_size, 4096).expect("Invalid layout");
++          let ksk_ptr = alloc(ksk_layout) as *mut u64;
++
++          if !ksk_ptr.is_null() {
++            ksk_ptr.copy_from_nonoverlapping(ksk_reordered[kernel].as_ptr(), ksk_reordered[kernel].len());
++            xrtBOWrite(
++              key.devmem_ksk[fpga_index][kernel],
++              ksk_ptr as *const c_void,
++              devmem_ksk_part_size,
++              0,
++            );
++            xrtBOSync(
++              key.devmem_ksk[fpga_index][kernel],
++              xclBOSyncDirection_XCL_BO_SYNC_BO_TO_DEVICE,
++              devmem_ksk_part_size,
++              0,
++            );
++            dealloc(ksk_ptr as *mut u8, ksk_layout);
++          } else {
++            println!("Memory allocation failed");
++          }
++        }
++      }
++
++      //////////////////////////////////////////////////////////////////////////
++      // transfer the bsk to FPGA memory
++
++      let bsk_reordered: Vec<Vec<u64>> = bsk_reorder(bsk, &key.params);
++
++      assert!(bsk_part_size == bsk_reordered[0].len(), "BSK re-oredering was wrong");
++      assert!(bsk_num_kernels == bsk_reordered.len(), "BSK re-oredering was wrong");
++
++      for fpga_index in 0..fpga_count {
++        for kernel in 0..bsk_num_kernels {
++          // at the transfer of each part;
++          //   1. allocate 4K aligned host-memory
++          //   2. copy the part to that memory
++          //   3. transfer the data from aligned host-memory to device-memory
++
++          use std::alloc::{alloc, dealloc, Layout};
++
++          let bsk_layout = Layout::from_size_align(devmem_bsk_part_size, 4096).expect("Invalid layout");
++          let bsk_ptr = alloc(bsk_layout) as *mut u64;
++
++          if !bsk_ptr.is_null() {
++            bsk_ptr.copy_from_nonoverlapping(bsk_reordered[kernel].as_ptr(), bsk_reordered[kernel].len());
++            xrtBOWrite(
++              key.devmem_bsk[fpga_index][kernel],
++              bsk_ptr as *const c_void,
++              devmem_bsk_part_size,
++              0,
++            );
++            xrtBOSync(
++              key.devmem_bsk[fpga_index][kernel],
++              xclBOSyncDirection_XCL_BO_SYNC_BO_TO_DEVICE,
++              devmem_bsk_part_size,
++              0,
++            );
++            dealloc(bsk_ptr as *mut u8, bsk_layout);
++          } else {
++            println!("Memory allocation failed");
++          }
++        }
++      }
++    }
++
++    key.enabled_fpga_count = fpga_count;
++    key.is_connected = true;
++  }
++}
++
++pub fn disable_fpga(key: &mut BelfortFpgaUtils) {
++  unsafe {
++    for fpga_index in 0..key.enabled_fpga_count {
++      // Free memories
++      xrtBOFree(key.devmem_lwe_in[fpga_index]);
++      xrtBOFree(key.devmem_lwe_out[fpga_index]);
++      for devmem in key.devmem_ksk[fpga_index].clone() {
++        xrtBOFree(devmem);
++      }
++      for devmem in key.devmem_bsk[fpga_index].clone() {
++        xrtBOFree(devmem);
++      }
++
++      // Close Runs
++      xrtRunClose(key.runhandle_lwe_in[fpga_index]);
++      xrtRunClose(key.runhandle_lwe_out[fpga_index]);
++      for runs in key.runhandle_ksk[fpga_index].clone() {
++        for run in runs {
++          xrtRunClose(run);
++        }
++      }
++      for runs in key.runhandle_bsk[fpga_index].clone() {
++        for run in runs {
++          xrtRunClose(run);
++        }
++      }
++
++      // Close Kernels
++      xrtKernelClose(key.kernelhandle_lwe_in[fpga_index]);
++      xrtKernelClose(key.kernelhandle_lwe_out[fpga_index]);
++      for kernel in key.kernelhandle_ksk[fpga_index].clone() {
++        xrtKernelClose(kernel);
++      }
++      for kernel in key.kernelhandle_bsk[fpga_index].clone() {
++        xrtKernelClose(kernel);
++      }
++    }
++  }
++
++  key.is_connected = false;
++}
++
++pub fn modulus_switch<T: UnsignedInteger>(num: T, num_bits: usize) -> T {
++  let t_size = std::mem::size_of::<T>() * 8;
++  let num128: u128 = num.cast_into();
++  let cut_off_bits = t_size - num_bits;
++  let rounded = (num128 + (1 << (cut_off_bits - 1))) % (1 << t_size);
++  let modswitched = rounded >> cut_off_bits;
++  let modswitched_t: T = modswitched.cast_into();
++  modswitched_t
++}
++
++pub fn ksk_reorder(ksk: LweKeyswitchKey<Vec<u64>>, params: &FpgaParameters) -> Vec<Vec<u64>> {
++  let lwe_dim: usize = params.lwe_dimension.0.cast_into();
++  let glwe_dim: usize = params.glwe_dimension.0.cast_into();
++  let poly_size: usize = params.polynomial_size.0.cast_into();
++  let ksk_lev: usize = params.ks_level.0.cast_into();
++  let ksk_num_kernels: usize = params.ksk_num_kernels;
++  let ks_num_streams: usize = 2 * params.streaming_size * glwe_dim * ksk_lev;
++  let ks_num_streams_per_kernel: usize = ks_num_streams / ksk_num_kernels;
++  let ksk_width = params.ksk_bits;
++
++  // Flatten
++
++  let mut ksk_flat: Vec<u64> = Vec::new();
++  for keyswitch_key_block in ksk.iter() {
++    for level_key_ciphertext in keyswitch_key_block.iter() {
++      for mask in level_key_ciphertext.get_mask().as_ref().iter() {
++        ksk_flat.push(*mask);
++      }
++      ksk_flat.push(*level_key_ciphertext.get_body().data);
++    }
++  }
++
++  // Reorder data per kernel + Modswitch
++
++  let mut ksk_part_reordered: Vec<Vec<u64>> = vec![vec![0; ksk_flat.len() / ksk_num_kernels]; ksk_num_kernels];
++
++  let mut ksk_kernel_index = 0;
++  let mut ksk_steam_index = 0;
++
++  for lwe_out_index in 0..(lwe_dim + 1) {
++    for lwe_in_index in 0..(glwe_dim * poly_size) {
++      for ksk_level_index in 0..ksk_lev {
++        let index = lwe_out_index + (lwe_dim + 1) * ksk_lev * lwe_in_index + (lwe_dim + 1) * ksk_level_index;
++
++        ksk_part_reordered[ksk_kernel_index][ksk_steam_index % ks_num_streams_per_kernel
++          + ((ksk_steam_index / ks_num_streams) * ks_num_streams_per_kernel)] =
++          modulus_switch(ksk_flat[index], ksk_width);
++
++        // println!(
++        //   "ksk_part_reordered[{}][{}] = json_ksk[{}] = {}",
++        //   ksk_kernel_index,
++        //   ksk_steam_index % ks_num_streams_per_kernel
++        //     + ((ksk_steam_index / ks_num_streams) * ks_num_streams_per_kernel),
++        //   index,
++        //   modulus_switch(&ksk_flat[index], ksk_width)
++        // );
++
++        ksk_steam_index += 1;
++
++        if ksk_steam_index % ks_num_streams_per_kernel == 0 {
++          ksk_kernel_index += 1;
++
++          if ksk_kernel_index == ksk_num_kernels {
++            ksk_kernel_index = 0;
++          }
++        }
++      }
++    }
++  }
++
++  ksk_part_reordered
++}
++
++pub fn bsk_reorder(bsk: FourierLweBootstrapKeyOwned, params: &FpgaParameters) -> Vec<Vec<u64>> {
++  use concrete_fft::c64;
++
++  //////////////////////////////////////////////////////////////////////////////
++  //
++  // Step 0 : Native     : c64 [lwe_dimension]reversed([pbs_level])[glwe_size][glwe_size][fourier_polynomial_size]
++  // Step 1 : Reorder to : c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  // Step 2 : Map to     : u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  // Step 3 : Split over : NUM_BSK_KERNELS
++  //
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Sizes and utility functions
++  //
++
++  let lwe_dimension: usize = bsk.input_lwe_dimension().0;
++  let glwe_size: usize = bsk.glwe_size().0;
++  let pbs_level: usize = bsk.decomposition_level_count().0;
++  let polynomial_size: usize = bsk.polynomial_size().0;
++  let streaming_size: usize = params.streaming_size;
++  let fourier_polynomial_size: usize = polynomial_size / 2;
++  let num_streaming_chunks: usize = fourier_polynomial_size / streaming_size;
++  let bsk_num_streams: usize = glwe_size * pbs_level * glwe_size * streaming_size;
++  let bsk_num_streams_per_kernel: usize = bsk_num_streams / params.bsk_num_kernels;
++
++  let bsk_size = lwe_dimension * pbs_level * glwe_size * glwe_size * polynomial_size / 2;
++  let bsk_part_size = bsk_size / params.bsk_num_kernels;
++
++  // Assuming Complex is a struct or enum in Rust representing complex numbers
++  // You need to replace Complex with the actual type you are using for complex numbers.
++  fn bit_reverse_perm(v: &[c64], fourier_polynomial_size: usize) -> Vec<c64> {
++    fn bit_reverse(input: usize, n_bits: usize) -> usize {
++      let binary_str = format!("{:0width$b}", input, width = n_bits as usize);
++      let reversed_str: String = binary_str.chars().rev().collect();
++      u32::from_str_radix(&reversed_str, 2).unwrap() as usize
++    }
++
++    let result: Vec<c64> = (0..fourier_polynomial_size)
++      .map(|i| v[bit_reverse(i, f64::log2(fourier_polynomial_size as f64) as usize)])
++      .collect();
++
++    result
++  }
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 1:
++  //
++  // Input:  c64 [lwe_dimension]reversed([pbs_level])[glwe_size][glwe_size][fourier_polynomial_size]
++  // Output: c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  //
++
++  let bsk_reordered: Vec<Vec<Vec<Vec<Vec<c64>>>>> = {
++    // Get All
++    // as [lwe_dimension * glwe_size * pbs_level * glwe_size][fourier_polynomial_size]
++    let bsk_64: Vec<Vec<c64>> = bsk
++      .clone()
++      .data()
++      .chunks(polynomial_size / 2)
++      // the first element should be put at the last position (likely because of different twist twiddles)
++      .map(|v| bit_reverse_perm(v, polynomial_size / 2))
++      .collect();
++
++    // Group by Columns
++    // as [lwe_dimension * glwe_size * pbs_level][glwe_size][fourier_polynomial_size]
++    let bsk_cols: Vec<Vec<Vec<c64>>> = bsk_64.chunks(glwe_size).map(|v| v.to_vec()).collect();
++
++    // Group by Rows
++    // as [lwe_dimension * pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    let bsk_rows: Vec<Vec<Vec<Vec<c64>>>> = bsk_cols.chunks(glwe_size).map(|v| v.to_vec()).collect();
++
++    // Group by Levels
++    // as [lwe_dimension][pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    let bsk_levels: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_rows.chunks(pbs_level).map(|v| v.to_vec()).collect();
++
++    // Reverts Rows
++    // as [lwe_dimension][pbs_level][glwe_size][glwe_size][fourier_polynomial_size]
++    // Tfhe-rs has the most-significant level first, but we want the least-significant level first
++    let bsk_rev: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_levels.into_iter().map(|v| v.into_iter().rev().collect()).collect();
++
++    // Transpose
++    // as [lwe_dimension][glwe_size][pbs_level][glwe_size][fourier_polynomial_size]
++    let bsk_trps: Vec<Vec<Vec<Vec<Vec<c64>>>>> = bsk_rev
++      .into_iter()
++      .map(|v| {
++        let rows = v.len();
++        let cols = v[0].len();
++        (0..cols)
++          .map(|col| (0..rows).map(|row| v[row][col].clone()).collect())
++          .collect()
++      })
++      .collect();
++
++    bsk_trps
++  };
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 2:
++  //
++  // Input:  c64 [lwe_dimension][glwe_size][pbs_level][glwe_size]bitreverse([fourier_polynomial_size])
++  // Output: u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  //
++
++  let mut bsk_streams: Vec<Vec<u64>> = vec![
++    vec![u64::default(); glwe_size * pbs_level * glwe_size * streaming_size * 2];
++    lwe_dimension * num_streaming_chunks
++  ];
++
++  fn c64_to_memval(value: c64, bsk_frac_bits: u32) -> (u64, u64) {
++    let factor = 2_u64.pow(bsk_frac_bits as u32);
++    let rounded_re = ((value.re * factor as f64).round() as i64) as u64;
++    let rounded_im = ((value.im * factor as f64).round() as i64) as u64;
++    (rounded_re, rounded_im)
++  }
++
++  for i in 0..lwe_dimension {
++    for j in 0..glwe_size {
++      for k in 0..pbs_level {
++        for l in 0..glwe_size {
++          for n in 0..streaming_size {
++            for m in 0..num_streaming_chunks {
++              let serial = num_streaming_chunks * i + m;
++              let parallel =
++                pbs_level * glwe_size * streaming_size * j + glwe_size * streaming_size * k + streaming_size * l + n;
++
++              (
++                bsk_streams[serial][2 * parallel + 0],
++                bsk_streams[serial][2 * parallel + 1],
++              ) = c64_to_memval(
++                bsk_reordered[i][j][k][l][streaming_size * m + n],
++                params.bsk_frac_bits as u32,
++              )
++            }
++          }
++        }
++      }
++    }
++  }
++
++  //////////////////////////////////////////////////////////////////////////////
++  // Step 3:
++  //
++  // Input:  u64 [lwe_dimension][num_streaming_chunks][glwe_size][pbs_level][glwe_size][streaming_size][2]
++  // Output: Split the "parallel" part of the bsk_streams between params.bsk_num_kernels kernels
++  //
++  //                                       Serial                                    Parallel
++  //                        <-----------------------------------><----------------------------------------------->
++  //   uint64_t bsk_streams[LWE_DIMENSION][NUM_STREAMING_CHUNKS][GLWE_SIZE][PBS_LEVEL][GLWE_SIZE][STREAMING_SIZE][2];
++  //
++
++  let bsk_final_size = lwe_dimension * num_streaming_chunks * glwe_size * pbs_level * glwe_size * streaming_size * 2;
++  let bsk_final_part_size = bsk_final_size / params.bsk_num_kernels;
++
++  assert!(bsk_final_size == bsk_size * 2, "BSK re-oredering is wrong");
++  assert!(bsk_final_part_size == bsk_part_size * 2, "BSK re-oredering is wrong");
++
++  let mut bsk_parts: Vec<Vec<u64>> = vec![vec![u64::default(); bsk_final_part_size]; params.bsk_num_kernels];
++
++  for kernel in 0..params.bsk_num_kernels {
++    let mut cnt = 0;
++
++    for serial in 0..(lwe_dimension * num_streaming_chunks) {
++      for parallel in 0..bsk_num_streams_per_kernel {
++        bsk_parts[kernel][cnt + 0] = bsk_streams[serial][kernel * bsk_num_streams_per_kernel * 2 + 2 * parallel + 0];
++        bsk_parts[kernel][cnt + 1] = bsk_streams[serial][kernel * bsk_num_streams_per_kernel * 2 + 2 * parallel + 1];
++        cnt += 2;
++      }
++    }
++  }
++
++  bsk_parts
++}
+diff --git a/tfhe/src/integer/server_key/radix_parallel/add.rs b/tfhe/src/integer/server_key/radix_parallel/add.rs
+index d9d9b686..66b7779c 100644
+--- a/tfhe/src/integer/server_key/radix_parallel/add.rs
++++ b/tfhe/src/integer/server_key/radix_parallel/add.rs
+@@ -1667,4 +1667,4 @@ mod tests {
+             }
+         }
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/tfhe/src/shortint/parameters/classic/gaussian/p_fail_2_minus_64/ks_pbs.rs b/tfhe/src/shortint/parameters/classic/gaussian/p_fail_2_minus_64/ks_pbs.rs
+index 9af60fde..d2294dae 100644
+--- a/tfhe/src/shortint/parameters/classic/gaussian/p_fail_2_minus_64/ks_pbs.rs
++++ b/tfhe/src/shortint/parameters/classic/gaussian/p_fail_2_minus_64/ks_pbs.rs
+@@ -234,21 +234,21 @@ pub const V0_11_PARAM_MESSAGE_2_CARRY_1_KS_PBS_GAUSSIAN_2M64: ClassicPBSParamete
+ // p-fail = 2^-64.074, algorithmic cost ~ 106, 2-norm = 5
+ pub const V0_11_PARAM_MESSAGE_2_CARRY_2_KS_PBS_GAUSSIAN_2M64: ClassicPBSParameters =
+     ClassicPBSParameters {
+-        lwe_dimension: LweDimension(834),
++        lwe_dimension: LweDimension(742),
+         glwe_dimension: GlweDimension(1),
+         polynomial_size: PolynomialSize(2048),
+         lwe_noise_distribution: DynamicDistribution::new_gaussian_from_std_dev(StandardDev(
+-            3.5539902359442825e-06,
++            0.000007069849454709433,
+         )),
+         glwe_noise_distribution: DynamicDistribution::new_gaussian_from_std_dev(StandardDev(
+-            2.845267479601915e-15,
++            0.00000000000000029403601535432533,
+         )),
+         pbs_base_log: DecompositionBaseLog(23),
+         pbs_level: DecompositionLevelCount(1),
+         ks_base_log: DecompositionBaseLog(3),
+         ks_level: DecompositionLevelCount(5),
+-        message_modulus: MessageModulus(4),
+-        carry_modulus: CarryModulus(4),
++        message_modulus: MessageModulus(16),
++        carry_modulus: CarryModulus(1),
+         max_noise_level: MaxNoiseLevel::new(5),
+         log2_p_fail: -64.074,
+         ciphertext_modulus: CiphertextModulus::new_native(),
+diff --git a/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs b/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
+index 2388e43c..cf4a16b6 100644
+--- a/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
++++ b/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
+@@ -17,8 +17,8 @@ pub const V0_11_PARAM_MESSAGE_2_CARRY_2_KS_PBS_TUNIFORM_2M64: ClassicPBSParamete
+         pbs_level: DecompositionLevelCount(1),
+         ks_base_log: DecompositionBaseLog(3),
+         ks_level: DecompositionLevelCount(5),
+-        message_modulus: MessageModulus(4),
+-        carry_modulus: CarryModulus(4),
++        message_modulus: MessageModulus(16),
++        carry_modulus: CarryModulus(1),
+         max_noise_level: MaxNoiseLevel::new(5),
+         log2_p_fail: -71.625,
+         ciphertext_modulus: CiphertextModulus::new_native(),
+diff --git a/tfhe/src/shortint/parameters/mod.rs b/tfhe/src/shortint/parameters/mod.rs
+index 8824a5f9..74a3a0a5 100644
+--- a/tfhe/src/shortint/parameters/mod.rs
++++ b/tfhe/src/shortint/parameters/mod.rs
+@@ -739,7 +739,7 @@ pub const BIVARIATE_PBS_COMPLIANT_PARAMETER_SET_VEC: [ClassicPBSParameters; 17]
+ /// encoded over X (reps. Y) bits, i.e., message_modulus = 2^{X} (resp. carry_modulus = 2^{Y}).
+ /// All parameter sets guarantee 128-bits of security and an error probability smaller than
+ /// 2^{-40} for a PBS.
+-///
++/// 
+ /// Return a parameter set from a message and carry moduli.
+ ///
+ /// # Example
+diff --git a/tfhe/src/shortint/server_key/add.rs b/tfhe/src/shortint/server_key/add.rs
+index 36c2882e..ce30ec79 100644
+--- a/tfhe/src/shortint/server_key/add.rs
++++ b/tfhe/src/shortint/server_key/add.rs
+@@ -1,3 +1,8 @@
++use rayon::iter::IndexedParallelIterator;
++use rayon::iter::IntoParallelRefIterator;
++use rayon::iter::IntoParallelRefMutIterator;
++use rayon::iter::ParallelIterator;
++
+ use super::{CiphertextNoiseDegree, SmartCleaningOperation};
+ use crate::core_crypto::algorithms::*;
+ use crate::shortint::ciphertext::Degree;
+@@ -183,6 +188,20 @@ impl ServerKey {
+         result
+     }
+ 
++    pub fn unchecked_add_packed(&self, cts_left: Vec<&Ciphertext>, cts_right: Vec<&Ciphertext>) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_add_packed_assign(&mut results, cts_right);
++        
++        results
++    }
++    
++    pub fn unchecked_add_packed_parallellized(&self, cts_left: Vec<&Ciphertext>, cts_right: Vec<&Ciphertext>) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_add_packed_parallellized_assign(&mut results, cts_right);
++        
++        results
++    }
++
+     /// Compute homomorphically an addition between two ciphertexts encrypting integer values.
+     ///
+     /// The result is _stored_ in the `ct_left` ciphertext.
+@@ -229,6 +248,24 @@ impl ServerKey {
+         unchecked_add_assign(ct_left, ct_right, self.max_noise_level);
+     }
+ 
++    pub fn unchecked_add_packed_assign(&self, cts_left: &mut Vec<Ciphertext>, cts_right: Vec<&Ciphertext>) {
++        use std::iter::zip;
++
++        for (ct_left, ct_right) in zip(cts_left, cts_right) {
++            self.unchecked_add_assign(ct_left, ct_right);
++        }
++    }
++
++    pub fn unchecked_add_packed_parallellized_assign(&self, cts_left: &mut Vec<Ciphertext>, cts_right: Vec<&Ciphertext>) {
++
++        cts_left
++        .par_iter_mut()
++        .zip(cts_right.par_iter())
++        .for_each(|(ct_left, ct_right)| {
++            self.unchecked_add_assign(ct_left, ct_right);
++        });
++    }
++
+     /// Verify if ct_left and ct_right can be added together.
+     ///
+     /// This checks that the sum of their degree is
+diff --git a/tfhe/src/shortint/server_key/mod.rs b/tfhe/src/shortint/server_key/mod.rs
+index b2bde953..071ce414 100644
+--- a/tfhe/src/shortint/server_key/mod.rs
++++ b/tfhe/src/shortint/server_key/mod.rs
+@@ -18,6 +18,8 @@ mod scalar_sub;
+ mod shift;
+ mod sub;
+ 
++use rayon::prelude::*;
++
+ pub mod compressed;
+ 
+ pub use bivariate_pbs::{
+@@ -630,7 +632,7 @@ impl ServerKey {
+         )
+     }
+ 
+-    pub(crate) fn generate_lookup_table_no_encode<F>(&self, f: F) -> LookupTableOwned
++    pub fn generate_lookup_table_no_encode<F>(&self, f: F) -> LookupTableOwned
+     where
+         F: Fn(u64) -> u64,
+     {
+@@ -921,6 +923,28 @@ impl ServerKey {
+         }
+     }
+ 
++    // #[cfg(not(feature = "fpga"))]
++    pub fn apply_lookup_table_packed_parallellized(
++        &self,
++        cts: Vec<&Ciphertext>,
++        accs: &Vec<LookupTableOwned>,
++    ) -> Vec<Ciphertext> {
++
++        let mut ct_ress: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
++
++        match self.pbs_order {
++            PBSOrder::KeyswitchBootstrap => {
++                self.keyswitch_programmable_bootstrap_assign_packed_parallelized(&mut ct_ress, &accs);
++            }
++            PBSOrder::BootstrapKeyswitch => {
++                panic!("Packed BootstrapKeyswitch is not supported")
++            }
++        };
++
++        ct_ress
++    }
++
++
+     /// Applies the given function to the message of a ciphertext
+     /// The input is reduced to the message space before the function application
+     /// Thee output of the function is also rduced to the message space such that the carry bits are
+@@ -1401,6 +1425,33 @@ impl ServerKey {
+         ct.set_noise_level(NoiseLevel::NOMINAL, self.max_noise_level);
+     }
+ 
++    // pub(crate) fn programmable_bootstrap_keyswitch_many_lut(
++    //     &self,
++    //     cts: &mut Vec<Ciphertext>,
++    //     accs: &Vec<LookupTableOwned>,
++    // ) {
++    //     use std::iter::zip;
++
++    //     for (ct, acc) in zip(cts, accs) {
++    //         self.keyswitch_programmable_bootstrap_assign(ct, acc);
++    //     }
++    // }
++
++    // #[cfg(not(feature = "fpga"))]
++    pub(crate) fn keyswitch_programmable_bootstrap_assign_packed_parallelized(
++        &self,
++        cts: &mut Vec<Ciphertext>,
++        accs: &Vec<LookupTableOwned>,
++    ) {
++
++        cts
++            .par_iter_mut()
++            .zip(accs.par_iter())
++            .for_each(|(ct, acc)| {
++                self.keyswitch_programmable_bootstrap_assign(ct, acc);
++            });
++    }
++
+     pub(crate) fn programmable_bootstrap_keyswitch_many_lut(
+         &self,
+         ct: &Ciphertext,
+diff --git a/tfhe/src/shortint/server_key/scalar_add.rs b/tfhe/src/shortint/server_key/scalar_add.rs
+index 88b0bb36..2a76e9fb 100644
+--- a/tfhe/src/shortint/server_key/scalar_add.rs
++++ b/tfhe/src/shortint/server_key/scalar_add.rs
+@@ -1,3 +1,6 @@
++use rayon::iter::IntoParallelRefMutIterator;
++use rayon::iter::ParallelIterator;
++
+ use super::CiphertextNoiseDegree;
+ use crate::core_crypto::algorithms::*;
+ use crate::core_crypto::entities::*;
+@@ -171,6 +174,18 @@ impl ServerKey {
+         ct_result
+     }
+ 
++    pub fn unchecked_scalar_add_packed(&self, cts: Vec<&Ciphertext>, scalar: u8) -> Vec<Ciphertext> {
++        let mut cts_result = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_add_packed_assign(&mut cts_result, scalar);
++        cts_result
++    }
++
++    pub fn unchecked_scalar_add_packed_parallellized(&self, cts: Vec<&Ciphertext>, scalar: u8) -> Vec<Ciphertext> {
++        let mut cts_result = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_add_packed_parallellized_assign(&mut cts_result, scalar);
++        cts_result
++    }
++
+     /// Compute homomorphically an addition between a ciphertext and a scalar.
+     ///
+     /// The result it stored in the given ciphertext.
+@@ -217,6 +232,16 @@ impl ServerKey {
+         ct.degree = Degree::new(ct.degree.get() + u64::from(scalar));
+     }
+ 
++    pub fn unchecked_scalar_add_packed_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        
++        cts.iter_mut().for_each(|ct| self.unchecked_scalar_add_assign(ct, scalar));
++    }
++
++    pub fn unchecked_scalar_add_packed_parallellized_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        
++        cts.par_iter_mut().for_each(|ct| self.unchecked_scalar_add_assign(ct, scalar));
++    }
++
+     /// Verify if a scalar can be added to the ciphertext.
+     ///
+     /// # Example
+diff --git a/tfhe/src/shortint/server_key/scalar_mul.rs b/tfhe/src/shortint/server_key/scalar_mul.rs
+index 45cb4576..16c1d79d 100644
+--- a/tfhe/src/shortint/server_key/scalar_mul.rs
++++ b/tfhe/src/shortint/server_key/scalar_mul.rs
+@@ -1,3 +1,6 @@
++use rayon::iter::IntoParallelRefMutIterator;
++use rayon::iter::ParallelIterator;
++
+ use super::CiphertextNoiseDegree;
+ use crate::core_crypto::algorithms::*;
+ use crate::core_crypto::entities::*;
+@@ -163,6 +166,20 @@ impl ServerKey {
+         ct_result
+     }
+ 
++    pub fn unchecked_scalar_mul_packed(&self, cts: Vec<&Ciphertext>, scalar: u8) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_mul_packed_assign(&mut results, scalar);
++
++        results
++    }
++
++    pub fn unchecked_scalar_mul_packed_parallellized(&self, cts: Vec<&Ciphertext>, scalar: u8) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_mul_packed_parallellized_assign(&mut results, scalar);
++
++        results
++    }
++
+     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
+     ///
+     /// The result it stored in the given ciphertext.
+@@ -206,6 +223,16 @@ impl ServerKey {
+         unchecked_scalar_mul_assign(ct, scalar, self.max_noise_level);
+     }
+ 
++    pub fn unchecked_scalar_mul_packed_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        
++        cts.iter_mut().for_each(|ct| self.unchecked_scalar_mul_assign(ct, scalar));
++    }
++
++    pub fn unchecked_scalar_mul_packed_parallellized_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        
++        cts.par_iter_mut().for_each(|ct| self.unchecked_scalar_mul_assign(ct, scalar));
++    }
++
+     /// Multiply one ciphertext with a scalar in the case the carry space cannot fit the product
+     /// applying the message space modulus in the process.
+     ///
+diff --git a/tfhe/src/shortint/server_key/sub.rs b/tfhe/src/shortint/server_key/sub.rs
+index 0fd77367..629c0d84 100644
+--- a/tfhe/src/shortint/server_key/sub.rs
++++ b/tfhe/src/shortint/server_key/sub.rs
+@@ -1,3 +1,9 @@
++use rayon::iter::IndexedParallelIterator;
++use rayon::iter::IntoParallelRefIterator;
++use rayon::iter::IntoParallelRefMutIterator;
++use rayon::iter::ParallelIterator;
++
++
+ use super::{CiphertextNoiseDegree, SmartCleaningOperation};
+ use crate::core_crypto::algorithms::*;
+ use crate::shortint::ciphertext::Degree;
+@@ -124,6 +130,20 @@ impl ServerKey {
+         result
+     }
+ 
++    pub fn unchecked_sub_packed(&self, cts_left: Vec<&Ciphertext>, cts_right: Vec<&Ciphertext>) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_sub_packed_assign(&mut results, cts_right);
++
++        results
++    }
++
++    pub fn unchecked_sub_packed_parallellized(&self, cts_left: Vec<&Ciphertext>, cts_right: Vec<&Ciphertext>) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_sub_packed_parallellized_assign(&mut results, cts_right);
++
++        results
++    }
++
+     /// Homomorphically subtracts ct_right to ct_left.
+     ///
+     /// The result is assigned in the `ct_left` ciphertext.
+@@ -155,6 +175,22 @@ impl ServerKey {
+         self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
+     }
+ 
++    pub fn unchecked_sub_packed_assign(&self, cts_left: &mut Vec<Ciphertext>, cts_right: Vec<&Ciphertext>) {
++        use std::iter::zip;
++
++        for (ct_left, ct_right) in zip(cts_left, cts_right) {
++            self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
++        }
++    }
++
++    pub fn unchecked_sub_packed_parallellized_assign(&self, cts_left: &mut Vec<Ciphertext>, cts_right: Vec<&Ciphertext>) {
++        
++        cts_left.par_iter_mut().zip(cts_right.par_iter()).for_each(|(ct_left, ct_right)| {
++            self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
++        });
++
++    }
++
+     /// Verify if ct_right can be subtracted to ct_left.
+     ///
+     /// # Example
