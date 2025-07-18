@@ -31,10 +31,6 @@ use pad::PadStr;
 
 mod myers;
 
-// Parameters to determine the input length of a string
-// const REPEAT: usize = 4;
-// const CHAR_REPEAT: usize = 9;
-
 fn get_decrypt_packed(data: &Vec<Ciphertext>, cks: &tfhe::shortint::ClientKey) -> Vec<u64> {
     let mut result = Vec::new();
     for element in data {
@@ -46,22 +42,6 @@ fn get_decrypt_packed(data: &Vec<Ciphertext>, cks: &tfhe::shortint::ClientKey) -
 
 fn main() {
     // // Build up the input strings
-    // let cst_string_part = "abc".repeat(CHAR_REPEAT);
-    // let cst_string_part2 = "qqq".repeat(CHAR_REPEAT);
-
-    // let str1 = format!("{}{}{}", "abb", &cst_string_part[..], "vbm");
-    // let str2 = format!("{}{}{}", "ebb", &cst_string_part2[..], "wbn");
-
-    // let x = str1.repeat(REPEAT);
-    // let y = str2.repeat(REPEAT);
-
-    // // Plaintext calculation
-    // let prev_vec = levenshtein_plain(&T, &P);
-    // println!("Outcome of the Levenshtein distance: {}", prev_vec[m]);
-
-    // let x = "kitten";
-    // let y = "sittan";
-
     let x = "JanPeter Danivers";
     let qlen = x.len();
 
@@ -86,7 +66,7 @@ fn main() {
             &x.pad_to_width(max_factor),
             &super_mod::data::NAME_LIST[i].pad_to_width(max_factor),
         );
-        // let outcome = lev[x.len()] as i64;
+
         plain_score.insert(i, lev as i64);
         println!(
             "{} [{}]: {}",
@@ -111,8 +91,6 @@ fn main() {
 
     let t = Instant::now();
     let lev_enc = myers::process_enc_query_enc_db(&x, &cks, &sks, &mut fpga_key, db_size, true);
-    // let lev_enc =
-    //     levenshtein::myers::process_plain_query_enc_db(&x, &cks, &sks, &mut fpga, true);
     let sec = t.elapsed().as_secs_f64();
     println!("Enc Lev[{db_size}]: {sec} s");
 
@@ -140,29 +118,6 @@ fn main() {
     } else {
         println!("Matched name: {matched_name} - {max_diff}");
     }
-
-    // for i in 0..super_mod::data::NAME_LIST.len() {
-    //     let enc_score = lev_enc.get(&i).unwrap();
-
-    //     let offset: i64 = i64::abs_diff(x.len().try_into().unwrap(), super_mod::data::NAME_LIST[i].len() as i64) as i64;
-    //     let diff: i64 = i64::abs_diff(
-    //         *enc_score,
-    //         super_mod::data::NAME_LIST[i].len() as i64) as i64 ;
-    //     let diff = diff - offset;
-
-    //     if diff > max_diff
-    //     {
-    //         matched_name = super_mod::data::NAME_LIST[i].to_string();
-    //         max_diff = diff;
-    //        }
-    // }
-
-    // if max_diff < 2 {
-    //     println!("No match found");
-    // }
-    // else{
-    //     println!("Matched name: {matched_name} - {max_diff}");
-    // }
 
     for i in 0..db_size {
         let enc_score = lev_enc.get(&i).unwrap();

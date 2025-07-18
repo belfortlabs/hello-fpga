@@ -481,7 +481,7 @@ impl App {
                     .sks
                     .unchecked_add_packed(key12.iter().collect(), v1.iter().collect());
 
-                let mut ct_res: Vec<Ciphertext> = Vec::new();
+                let mut ct_res: Vec<Ciphertext>;
                 if !fpga_enable {
                     ct_res = enc_struct.sks.apply_lookup_table_packed_parallellized(
                         key.iter().collect(),
@@ -588,15 +588,6 @@ impl App {
 
         for i in 0..enc_struct.db_size {
             let enc_score = result_map.get(&i).unwrap();
-
-            // Debug stmt
-            // let string_debug = format!(
-            //     "DB: {}[{}] - Score: {}",
-            //     data::NAME_LIST[i], data::NAME_LIST[i].len(), enc_score
-            // );
-
-            // self.messages
-            // .push((string_debug.to_string(), " ".to_owned(), " ".to_owned(), " ".to_owned()));
 
             let diff = i64::abs_diff(
                 data::NAME_LIST[i].len().try_into().unwrap(),
