@@ -1,6 +1,4 @@
-// Created by: Wouter Legiest
-
-pub const NAME_LIST: [&'static str; 48] = [
+pub const NAME_LIST: [&str; 48] = [
     "Wouter Legiest",
     "Jan-Pieter D'Anvers",
     "Ingrid Verbauwhede",

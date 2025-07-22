@@ -36,10 +36,11 @@ pub fn extract_number_elements(
 ) -> Vec<Ciphertext> {
     let mut zero_zero_elements = Vec::new();
     for matrix in data {
-        // Check if the matrix has at least one element (to avoid indexing errors)
-        if !matrix.is_empty() && !matrix[0].is_empty() {
-            zero_zero_elements.push(matrix[x][y].clone()); // Clone to avoid ownership issues
+        // Check if the matrix has at least one element to avoid indexing errors
+        if matrix.is_empty() || matrix[0].is_empty() {
+            continue;
         }
+        zero_zero_elements.push(matrix[x][y].clone()); // Clone to avoid ownership issues
     }
     zero_zero_elements
 }
