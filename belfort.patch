@@ -1,3 +1,254 @@
+From ff1e5b1f28e9cca950e95ab73d0be5c460d07136 Mon Sep 17 00:00:00 2001
+From: Tuditi <david.detroch@belfort.eu>
+Date: Thu, 17 Jul 2025 14:48:38 +0000
+Subject: [PATCH] Belfort Patch Applied
+
+feat: add leuvenshtein parameter set
+
+feat: add packed operations
+---
+ .gitignore                                    |    4 +
+ .gitlab-ci.yml                                |   77 +
+ Cargo.toml                                    |   13 +-
+ Makefile                                      |   79 +-
+ README.md                                     |   25 +-
+ ZAMA_README.md                                |  256 ++++
+ .../cuda/include/ciphertext.h                 |   33 +-
+ .../compression/compression_utilities.h       |  257 ++--
+ .../cuda/src/crypto/ciphertext.cu             |  116 +-
+ .../src/integer/compression/compression.cu    |   98 +-
+ .../src/integer/compression/compression.cuh   |   73 +-
+ .../cuda/src/pbs/bootstrapping_key.cuh        |   79 +-
+ format.sh                                     |   21 +
+ params/boolean/.gitignore                     |    2 +
+ params/shortint/.gitignore                    |    2 +
+ scripts/copy_benchmarks.sh                    |   46 +
+ tfhe/Cargo.toml                               |   46 +-
+ tfhe/benches/fpga/compare_benchmarks.py       |   68 +
+ tfhe/benches/fpga/erc20.rs                    |  120 ++
+ tfhe/benches/fpga/helpers.py                  |   42 +
+ tfhe/benches/fpga/integer.rs                  |  849 +++++++++++
+ tfhe/benches/fpga/plot_throughput.py          |  194 +++
+ tfhe/benches/fpga/report_integers.py          |  163 +++
+ tfhe/benches/fpga/throughput.rs               |  160 ++
+ tfhe/benches/integer/bench.rs                 |   56 +-
+ tfhe/build.rs                                 |   39 +-
+ tfhe/c_api_tests/test_boolean_keygen.c        |    2 +-
+ tfhe/c_api_tests/test_boolean_server_key.c    |    2 +-
+ tfhe/c_api_tests/test_high_level_zk.c         |    2 +-
+ tfhe/c_api_tests/test_micro_bench_and.c       |    2 +-
+ tfhe/c_api_tests/test_shortint_keygen.c       |    2 +-
+ tfhe/c_api_tests/test_shortint_pbs.c          |    2 +-
+ tfhe/c_api_tests/test_shortint_server_key.c   |    2 +-
+ tfhe/docs/guides/debug.md                     |   72 +
+ tfhe/examples/sha256.rs                       |    4 +
+ tfhe/js_on_wasm_tests/test-hlapi-unsigned.js  |    1 +
+ tfhe/src/boolean/engine/bootstrapping.rs      |   24 +-
+ tfhe/src/boolean/engine/fpga.rs               |  201 +++
+ tfhe/src/boolean/engine/mod.rs                |    5 +-
+ tfhe/src/boolean/server_key/mod.rs            |    8 +
+ tfhe/src/core_crypto/entities/polynomial.rs   |   16 +-
+ .../core_crypto/fpga/keyswitch_bootstrap.rs   |   90 ++
+ tfhe/src/core_crypto/fpga/lookup_vector.rs    |   51 +
+ tfhe/src/core_crypto/fpga/mod.rs              |   51 +
+ tfhe/src/core_crypto/fpga/utils.rs            |  172 +++
+ tfhe/src/core_crypto/mod.rs                   |    2 +
+ tfhe/src/core_crypto/probe_time.rs            |   37 +
+ tfhe/src/high_level_api/array/cpu/integers.rs |   34 +-
+ .../high_level_api/array/dynamic/booleans.rs  |   12 +
+ .../high_level_api/array/dynamic/signed.rs    |   12 +
+ .../high_level_api/array/dynamic/unsigned.rs  |   22 +
+ .../src/high_level_api/array/fpga/integers.rs |   99 ++
+ tfhe/src/high_level_api/array/fpga/mod.rs     |    4 +
+ .../high_level_api/array/fpga/tests/mod.rs    |   16 +
+ .../array/fpga/tests/test_arrays.rs           |   72 +
+ tfhe/src/high_level_api/array/mod.rs          |    6 +
+ tfhe/src/high_level_api/array/tests/mod.rs    |    8 +-
+ tfhe/src/high_level_api/booleans/base.rs      |  198 ++-
+ tfhe/src/high_level_api/booleans/encrypt.rs   |    5 +
+ tfhe/src/high_level_api/booleans/inner.rs     |    4 +
+ tfhe/src/high_level_api/booleans/oprf.rs      |    9 +
+ tfhe/src/high_level_api/booleans/tests.rs     |    2 +-
+ tfhe/src/high_level_api/compact_list.rs       |   10 +
+ .../compressed_ciphertext_list.rs             |    2 +
+ tfhe/src/high_level_api/global_state.rs       |   35 +
+ tfhe/src/high_level_api/integers/oprf.rs      |   49 +
+ .../high_level_api/integers/signed/base.rs    |  160 ++
+ .../high_level_api/integers/signed/inner.rs   |    4 +
+ .../src/high_level_api/integers/signed/ops.rs |  303 +++-
+ .../integers/signed/overflowing_ops.rs        |   57 +
+ .../integers/signed/scalar_ops.rs             |  293 +++-
+ .../high_level_api/integers/unsigned/base.rs  |  198 ++-
+ .../integers/unsigned/encrypt.rs              |    8 +
+ .../high_level_api/integers/unsigned/inner.rs |    4 +
+ .../high_level_api/integers/unsigned/ops.rs   |  254 +++-
+ .../integers/unsigned/overflowing_ops.rs      |   58 +
+ .../integers/unsigned/scalar_ops.rs           |  223 ++-
+ tfhe/src/high_level_api/keys/mod.rs           |    4 +-
+ tfhe/src/high_level_api/keys/server.rs        |   35 +
+ tfhe/src/high_level_api/mod.rs                |    6 +-
+ .../high_level_api/tests/tags_on_entities.rs  |    9 +
+ tfhe/src/integer/ciphertext/compact_list.rs   |   10 +
+ tfhe/src/integer/fpga/mod.rs                  |    2 +
+ .../src/integer/fpga/server_key/comparator.rs | 1295 +++++++++++++++++
+ tfhe/src/integer/fpga/server_key/fpga.rs      |  143 ++
+ tfhe/src/integer/fpga/server_key/luts.rs      |   28 +
+ tfhe/src/integer/fpga/server_key/mod.rs       |  483 ++++++
+ tfhe/src/integer/fpga/server_key/radix/abs.rs |   34 +
+ tfhe/src/integer/fpga/server_key/radix/add.rs |  153 ++
+ .../fpga/server_key/radix/bit_extractor.rs    |  110 ++
+ .../fpga/server_key/radix/bitwise_op.rs       |  536 +++++++
+ .../src/integer/fpga/server_key/radix/cmux.rs |  306 ++++
+ .../fpga/server_key/radix/comparison.rs       |  261 ++++
+ .../fpga/server_key/radix/count_zeros_ones.rs |   88 ++
+ .../integer/fpga/server_key/radix/div_mod.rs  |  715 +++++++++
+ .../integer/fpga/server_key/radix/ilog2.rs    |  432 ++++++
+ tfhe/src/integer/fpga/server_key/radix/mod.rs |  174 +++
+ .../radix/modulus_switch_compression.rs       |   59 +
+ tfhe/src/integer/fpga/server_key/radix/mul.rs |  783 ++++++++++
+ tfhe/src/integer/fpga/server_key/radix/neg.rs |  101 ++
+ .../fpga/server_key/radix/reverse_bits.rs     |   37 +
+ .../integer/fpga/server_key/radix/rotate.rs   |  197 +++
+ .../fpga/server_key/radix/scalar_add.rs       |  160 ++
+ .../server_key/radix/scalar_bitwise_op.rs     |  437 ++++++
+ .../server_key/radix/scalar_comparison.rs     |  659 +++++++++
+ .../fpga/server_key/radix/scalar_div_mod.rs   |  392 +++++
+ .../fpga/server_key/radix/scalar_mul.rs       |  213 +++
+ .../fpga/server_key/radix/scalar_rotate.rs    |  660 +++++++++
+ .../fpga/server_key/radix/scalar_shift.rs     |  750 ++++++++++
+ .../fpga/server_key/radix/scalar_sub.rs       |  124 ++
+ .../integer/fpga/server_key/radix/shift.rs    |  398 +++++
+ .../integer/fpga/server_key/radix/slice.rs    |  278 ++++
+ tfhe/src/integer/fpga/server_key/radix/sub.rs |  313 ++++
+ tfhe/src/integer/fpga/server_key/radix/sum.rs |  315 ++++
+ .../fpga/server_key/radix/tests/mod.rs        |  141 ++
+ .../fpga/server_key/radix/tests/test_add.rs   |   34 +
+ .../server_key/radix/tests/test_bitwise_op.rs |  104 ++
+ .../server_key/radix/tests/test_comparison.rs |  114 ++
+ .../server_key/radix/tests/test_div_mod.rs    |   62 +
+ .../fpga/server_key/radix/tests/test_ilog2.rs |   56 +
+ .../fpga/server_key/radix/tests/test_mul.rs   |  147 ++
+ .../fpga/server_key/radix/tests/test_neg.rs   |   28 +
+ .../server_key/radix/tests/test_propagate.rs  |   69 +
+ .../server_key/radix/tests/test_rotate.rs     |   47 +
+ .../server_key/radix/tests/test_scalar_add.rs |   38 +
+ .../radix/tests/test_scalar_bitwise_op.rs     |   37 +
+ .../radix/tests/test_scalar_comparison.rs     |  108 ++
+ .../radix/tests/test_scalar_div_mod.rs        |   17 +
+ .../server_key/radix/tests/test_scalar_mul.rs |   56 +
+ .../radix/tests/test_scalar_rotate.rs         |   47 +
+ .../radix/tests/test_scalar_shift.rs          |   47 +
+ .../server_key/radix/tests/test_scalar_sub.rs |   37 +
+ .../fpga/server_key/radix/tests/test_shift.rs |   47 +
+ .../fpga/server_key/radix/tests/test_sub.rs   |   46 +
+ .../fpga/server_key/radix/tests/test_sum.rs   |   56 +
+ .../server_key/radix/vector_comparisons.rs    |  103 ++
+ .../fpga/server_key/radix/vector_find.rs      |  720 +++++++++
+ tfhe/src/integer/mod.rs                       |    5 +-
+ tfhe/src/integer/server_key/comparator.rs     |    2 +-
+ .../radix_parallel/count_zeros_ones.rs        |   16 +-
+ .../integer/server_key/radix_parallel/mod.rs  |    4 +-
+ .../modulus_switch_compression.rs             |    4 +-
+ .../integer/server_key/radix_parallel/mul.rs  |    2 +-
+ .../radix_parallel/tests_unsigned/mod.rs      |   28 +-
+ .../radix_parallel/tests_unsigned/test_sum.rs |   48 +-
+ tfhe/src/integer/wopbs/mod.rs                 | 1182 ---------------
+ tfhe/src/integer/wopbs/test.rs                |  292 ----
+ tfhe/src/shortint/client_key/mod.rs           |    2 +-
+ tfhe/src/shortint/engine/mod.rs               |   68 +
+ tfhe/src/shortint/fpga.rs                     |  166 +++
+ tfhe/src/shortint/mod.rs                      |    1 +
+ .../tuniform/p_fail_2_minus_64/ks_pbs.rs      |   19 +
+ tfhe/src/shortint/server_key/add.rs           |   26 +
+ tfhe/src/shortint/server_key/mod.rs           |  107 +-
+ tfhe/src/shortint/server_key/scalar_add.rs    |   17 +
+ tfhe/src/shortint/server_key/scalar_mul.rs    |   18 +
+ tfhe/src/shortint/server_key/sub.rs           |   26 +
+ tfhe/web_wasm_parallel_tests/worker.js        |    8 +
+ 158 files changed, 18799 insertions(+), 1930 deletions(-)
+ create mode 100644 .gitlab-ci.yml
+ create mode 100644 ZAMA_README.md
+ create mode 100755 format.sh
+ create mode 100644 params/boolean/.gitignore
+ create mode 100644 params/shortint/.gitignore
+ create mode 100755 scripts/copy_benchmarks.sh
+ create mode 100644 tfhe/benches/fpga/compare_benchmarks.py
+ create mode 100644 tfhe/benches/fpga/erc20.rs
+ create mode 100644 tfhe/benches/fpga/helpers.py
+ create mode 100644 tfhe/benches/fpga/integer.rs
+ create mode 100644 tfhe/benches/fpga/plot_throughput.py
+ create mode 100644 tfhe/benches/fpga/report_integers.py
+ create mode 100644 tfhe/benches/fpga/throughput.rs
+ create mode 100644 tfhe/docs/guides/debug.md
+ create mode 100644 tfhe/src/boolean/engine/fpga.rs
+ create mode 100644 tfhe/src/core_crypto/fpga/keyswitch_bootstrap.rs
+ create mode 100644 tfhe/src/core_crypto/fpga/lookup_vector.rs
+ create mode 100644 tfhe/src/core_crypto/fpga/mod.rs
+ create mode 100644 tfhe/src/core_crypto/fpga/utils.rs
+ create mode 100644 tfhe/src/core_crypto/probe_time.rs
+ create mode 100644 tfhe/src/high_level_api/array/fpga/integers.rs
+ create mode 100644 tfhe/src/high_level_api/array/fpga/mod.rs
+ create mode 100644 tfhe/src/high_level_api/array/fpga/tests/mod.rs
+ create mode 100644 tfhe/src/high_level_api/array/fpga/tests/test_arrays.rs
+ create mode 100644 tfhe/src/integer/fpga/mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/comparator.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/fpga.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/luts.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/abs.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/add.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/bit_extractor.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/bitwise_op.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/cmux.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/comparison.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/count_zeros_ones.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/div_mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/ilog2.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/modulus_switch_compression.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/mul.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/neg.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/reverse_bits.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/rotate.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_add.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_bitwise_op.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_comparison.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_div_mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_mul.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_rotate.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_shift.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/scalar_sub.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/shift.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/slice.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/sub.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/sum.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_add.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_bitwise_op.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_comparison.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_div_mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_ilog2.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_mul.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_neg.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_propagate.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_rotate.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_add.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_bitwise_op.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_comparison.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_div_mod.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_mul.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_rotate.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_shift.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_scalar_sub.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_shift.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_sub.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/tests/test_sum.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/vector_comparisons.rs
+ create mode 100644 tfhe/src/integer/fpga/server_key/radix/vector_find.rs
+ delete mode 100644 tfhe/src/integer/wopbs/mod.rs
+ delete mode 100644 tfhe/src/integer/wopbs/test.rs
+ create mode 100644 tfhe/src/shortint/fpga.rs
+
 diff --git a/.gitignore b/.gitignore
 index 9babe2bc8..7a403ab49 100644
 --- a/.gitignore
@@ -24105,11 +24356,133 @@ index 38e066513..f870f6566 100755
  pub mod key_switching_key;
  #[cfg(any(test, doctest, feature = "internal-keycache"))]
  pub mod keycache;
+diff --git a/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs b/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
+index 2388e43ca..075e09230 100644
+--- a/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
++++ b/tfhe/src/shortint/parameters/classic/tuniform/p_fail_2_minus_64/ks_pbs.rs
+@@ -24,3 +24,22 @@ pub const V0_11_PARAM_MESSAGE_2_CARRY_2_KS_PBS_TUNIFORM_2M64: ClassicPBSParamete
+         ciphertext_modulus: CiphertextModulus::new_native(),
+         encryption_key_choice: EncryptionKeyChoice::Big,
+     };
++
++// security = 132 bits, p-fail = 2^-71.625
++pub const V0_11_PARAM_MESSAGE_LEUVENSHTEIN: ClassicPBSParameters = ClassicPBSParameters {
++    lwe_dimension: LweDimension(879),
++    glwe_dimension: GlweDimension(1),
++    polynomial_size: PolynomialSize(2048),
++    lwe_noise_distribution: DynamicDistribution::new_t_uniform(46),
++    glwe_noise_distribution: DynamicDistribution::new_t_uniform(17),
++    pbs_base_log: DecompositionBaseLog(23),
++    pbs_level: DecompositionLevelCount(1),
++    ks_base_log: DecompositionBaseLog(3),
++    ks_level: DecompositionLevelCount(5),
++    message_modulus: MessageModulus(16),
++    carry_modulus: CarryModulus(1),
++    max_noise_level: MaxNoiseLevel::new(5),
++    log2_p_fail: -71.625,
++    ciphertext_modulus: CiphertextModulus::new_native(),
++    encryption_key_choice: EncryptionKeyChoice::Big,
++};
+diff --git a/tfhe/src/shortint/server_key/add.rs b/tfhe/src/shortint/server_key/add.rs
+index 36c2882ee..527a8d9e1 100644
+--- a/tfhe/src/shortint/server_key/add.rs
++++ b/tfhe/src/shortint/server_key/add.rs
+@@ -1,3 +1,5 @@
++use rayon::prelude::*;
++
+ use super::{CiphertextNoiseDegree, SmartCleaningOperation};
+ use crate::core_crypto::algorithms::*;
+ use crate::shortint::ciphertext::Degree;
+@@ -183,6 +185,17 @@ impl ServerKey {
+         result
+     }
+ 
++    pub fn unchecked_add_packed(
++        &self,
++        cts_left: Vec<&Ciphertext>,
++        cts_right: Vec<&Ciphertext>,
++    ) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_add_packed_assign(&mut results, cts_right);
++
++        results
++    }
++
+     /// Compute homomorphically an addition between two ciphertexts encrypting integer values.
+     ///
+     /// The result is _stored_ in the `ct_left` ciphertext.
+@@ -229,6 +242,19 @@ impl ServerKey {
+         unchecked_add_assign(ct_left, ct_right, self.max_noise_level);
+     }
+ 
++    pub fn unchecked_add_packed_assign(
++        &self,
++        cts_left: &mut Vec<Ciphertext>,
++        cts_right: Vec<&Ciphertext>,
++    ) {
++        cts_left
++            .par_iter_mut()
++            .zip(cts_right.par_iter())
++            .for_each(|(ct_left, ct_right)| {
++                self.unchecked_add_assign(ct_left, ct_right);
++            });
++    }
++
+     /// Verify if ct_left and ct_right can be added together.
+     ///
+     /// This checks that the sum of their degree is
 diff --git a/tfhe/src/shortint/server_key/mod.rs b/tfhe/src/shortint/server_key/mod.rs
-index 0fc59daeb..b2bde9535 100644
+index 0fc59daeb..db20f6082 100644
 --- a/tfhe/src/shortint/server_key/mod.rs
 +++ b/tfhe/src/shortint/server_key/mod.rs
-@@ -1201,7 +1201,7 @@ impl ServerKey {
+@@ -18,6 +18,8 @@ mod scalar_sub;
+ mod shift;
+ mod sub;
+ 
++use rayon::prelude::*;
++
+ pub mod compressed;
+ 
+ pub use bivariate_pbs::{
+@@ -630,7 +632,7 @@ impl ServerKey {
+         )
+     }
+ 
+-    pub(crate) fn generate_lookup_table_no_encode<F>(&self, f: F) -> LookupTableOwned
++    pub fn generate_lookup_table_no_encode<F>(&self, f: F) -> LookupTableOwned
+     where
+         F: Fn(u64) -> u64,
+     {
+@@ -921,6 +923,28 @@ impl ServerKey {
+         }
+     }
+ 
++    pub fn apply_lookup_table_packed_parallellized(
++        &self,
++        cts: Vec<&Ciphertext>,
++        accs: &Vec<LookupTableOwned>,
++    ) -> Vec<Ciphertext> {
++        let mut ct_res: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
++
++        match self.pbs_order {
++            PBSOrder::KeyswitchBootstrap => {
++                self.keyswitch_programmable_bootstrap_assign_packed_parallelized(
++                    &mut ct_res,
++                    &accs,
++                );
++            }
++            PBSOrder::BootstrapKeyswitch => {
++                panic!("Packed BootstrapKeyswitch is not supported")
++            }
++        };
++
++        ct_res
++    }
++
+     /// Applies the given function to the message of a ciphertext
+     /// The input is reduced to the message space before the function application
+     /// Thee output of the function is also rduced to the message space such that the carry bits are
+@@ -1201,7 +1225,7 @@ impl ServerKey {
              .set_deterministic_pbs_execution(new_deterministic_execution);
      }
  
@@ -24118,7 +24491,7 @@ index 0fc59daeb..b2bde9535 100644
          #[cfg(feature = "pbs-stats")]
          // We want to count trivial PBS in simulator mode
          // In the non trivial case, this increment is done in the `apply_blind_rotate` function
-@@ -1334,6 +1334,73 @@ impl ServerKey {
+@@ -1334,6 +1358,85 @@ impl ServerKey {
          outputs
      }
  
@@ -24189,9 +24562,148 @@ index 0fc59daeb..b2bde9535 100644
 +        ct.set_noise_level(NoiseLevel::NOMINAL, self.max_noise_level);
 +    }
 +
++    pub(crate) fn keyswitch_programmable_bootstrap_assign_packed_parallelized(
++        &self,
++        cts: &mut Vec<Ciphertext>,
++        accs: &Vec<LookupTableOwned>,
++    ) {
++        cts.par_iter_mut()
++            .zip(accs.par_iter())
++            .for_each(|(ct, acc)| {
++                self.keyswitch_programmable_bootstrap_assign(ct, acc);
++            });
++    }
++
      pub(crate) fn programmable_bootstrap_keyswitch_many_lut(
          &self,
          ct: &Ciphertext,
+diff --git a/tfhe/src/shortint/server_key/scalar_add.rs b/tfhe/src/shortint/server_key/scalar_add.rs
+index 88b0bb362..7d44330bd 100644
+--- a/tfhe/src/shortint/server_key/scalar_add.rs
++++ b/tfhe/src/shortint/server_key/scalar_add.rs
+@@ -1,3 +1,5 @@
++use rayon::iter::*;
++
+ use super::CiphertextNoiseDegree;
+ use crate::core_crypto::algorithms::*;
+ use crate::core_crypto::entities::*;
+@@ -171,6 +173,16 @@ impl ServerKey {
+         ct_result
+     }
+ 
++    pub fn unchecked_scalar_add_packed(
++        &self,
++        cts: Vec<&Ciphertext>,
++        scalar: u8,
++    ) -> Vec<Ciphertext> {
++        let mut cts_result = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_add_packed_assign(&mut cts_result, scalar);
++        cts_result
++    }
++
+     /// Compute homomorphically an addition between a ciphertext and a scalar.
+     ///
+     /// The result it stored in the given ciphertext.
+@@ -217,6 +229,11 @@ impl ServerKey {
+         ct.degree = Degree::new(ct.degree.get() + u64::from(scalar));
+     }
+ 
++    pub fn unchecked_scalar_add_packed_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        cts.par_iter_mut()
++            .for_each(|ct| self.unchecked_scalar_add_assign(ct, scalar));
++    }
++
+     /// Verify if a scalar can be added to the ciphertext.
+     ///
+     /// # Example
+diff --git a/tfhe/src/shortint/server_key/scalar_mul.rs b/tfhe/src/shortint/server_key/scalar_mul.rs
+index 45cb4576d..c88ae3dec 100644
+--- a/tfhe/src/shortint/server_key/scalar_mul.rs
++++ b/tfhe/src/shortint/server_key/scalar_mul.rs
+@@ -1,3 +1,5 @@
++use rayon::iter::*;
++
+ use super::CiphertextNoiseDegree;
+ use crate::core_crypto::algorithms::*;
+ use crate::core_crypto::entities::*;
+@@ -163,6 +165,17 @@ impl ServerKey {
+         ct_result
+     }
+ 
++    pub fn unchecked_scalar_mul_packed(
++        &self,
++        cts: Vec<&Ciphertext>,
++        scalar: u8,
++    ) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts.into_iter().cloned().collect();
++        self.unchecked_scalar_mul_packed_assign(&mut results, scalar);
++
++        results
++    }
++
+     /// Compute homomorphically a multiplication of a ciphertext by a scalar.
+     ///
+     /// The result it stored in the given ciphertext.
+@@ -206,6 +219,11 @@ impl ServerKey {
+         unchecked_scalar_mul_assign(ct, scalar, self.max_noise_level);
+     }
+ 
++    pub fn unchecked_scalar_mul_packed_assign(&self, cts: &mut Vec<Ciphertext>, scalar: u8) {
++        cts.par_iter_mut()
++            .for_each(|ct| self.unchecked_scalar_mul_assign(ct, scalar));
++    }
++
+     /// Multiply one ciphertext with a scalar in the case the carry space cannot fit the product
+     /// applying the message space modulus in the process.
+     ///
+diff --git a/tfhe/src/shortint/server_key/sub.rs b/tfhe/src/shortint/server_key/sub.rs
+index 0fd77367a..ff4af69f6 100644
+--- a/tfhe/src/shortint/server_key/sub.rs
++++ b/tfhe/src/shortint/server_key/sub.rs
+@@ -1,3 +1,5 @@
++use rayon::iter::*;
++
+ use super::{CiphertextNoiseDegree, SmartCleaningOperation};
+ use crate::core_crypto::algorithms::*;
+ use crate::shortint::ciphertext::Degree;
+@@ -124,6 +126,17 @@ impl ServerKey {
+         result
+     }
+ 
++    pub fn unchecked_sub_packed(
++        &self,
++        cts_left: Vec<&Ciphertext>,
++        cts_right: Vec<&Ciphertext>,
++    ) -> Vec<Ciphertext> {
++        let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
++        self.unchecked_sub_packed_assign(&mut results, cts_right);
++
++        results
++    }
++
+     /// Homomorphically subtracts ct_right to ct_left.
+     ///
+     /// The result is assigned in the `ct_left` ciphertext.
+@@ -155,6 +168,19 @@ impl ServerKey {
+         self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
+     }
+ 
++    pub fn unchecked_sub_packed_assign(
++        &self,
++        cts_left: &mut Vec<Ciphertext>,
++        cts_right: Vec<&Ciphertext>,
++    ) {
++        cts_left
++            .par_iter_mut()
++            .zip(cts_right.par_iter())
++            .for_each(|(ct_left, ct_right)| {
++                self.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
++            });
++    }
++
+     /// Verify if ct_right can be subtracted to ct_left.
+     ///
+     /// # Example
 diff --git a/tfhe/web_wasm_parallel_tests/worker.js b/tfhe/web_wasm_parallel_tests/worker.js
 index 4090e73b2..bc3ff3a56 100644
 --- a/tfhe/web_wasm_parallel_tests/worker.js
@@ -24218,3 +24730,6 @@ index 4090e73b2..bc3ff3a56 100644
    // 320 bits is a use case we have, 8 bits per byte
    const metadata = new Uint8Array(320 / 8);
    crypto.getRandomValues(metadata);
+-- 
+2.43.0
+
