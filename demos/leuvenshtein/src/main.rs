@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
-    let params: ClassicPBSParameters = tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2;
+    let params: ClassicPBSParameters = tfhe::shortint::parameters::V0_11_PARAM_MESSAGE_LEUVENSHTEIN;
     let cks: ClientKey = ClientKey::new(params);
     let sks: ServerKey = ServerKey::new(&cks);
     let integer_server_key: IntegerServerKey =
