@@ -87,7 +87,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         let mut peq_plain = HashMap::new();
 
         for i in &ascii_collection {
-            let s = *i as u8 as char;
+            let s = *i as char;
             let mut bitvec = vec![0u8; m];
 
             for j in 0..m {
@@ -111,7 +111,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     let mut enc_struct = EncStruct {
         input: String::new(),
         query: String::new(),
-        max_factor: max_factor,
+        max_factor,
         db_size: data::NAME_LIST.len(),
         th: 0,
         time: Instant::now(),
@@ -120,8 +120,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         db_enc_matrix: Vec::new(),
         db1_enc_matrix: Vec::new(),
         db_enc_map: db_processed,
-        sks: sks,
-        cks: cks,
+        sks,
+        cks,
         fpga_key: &mut fpga_key,
         one_enc_vec: Vec::new(),
         v_matrices: Vec::new(),
@@ -143,7 +143,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         terminal.draw(|f| ui(f, &app, &enc_struct))?;
 
         if matches!(app.input_mode, InputMode::Process) {
-            //check if string start with p:
             if enc_struct.input.starts_with("p:") {
                 if app.progress_done.len() == 0 {
                     app.process_plain_query_enc_db(&mut enc_struct);
