@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use rayon::iter::*;
+
+use rayon::iter::IntoParallelRefMutIterator;
 use tfhe::shortint::prelude::*;
 
 pub fn get_column(data: &Vec<Vec<Ciphertext>>, index: usize) -> Vec<Ciphertext> {
@@ -54,4 +57,91 @@ pub fn write_number_elements(
     for i in 0..input.len() {
         data[i][x][y] = input[i].clone();
     }
+}
+
+pub fn unchecked_add_packed_assign(
+    sk: &tfhe::shortint::ServerKey,
+    cts_left: &mut Vec<Ciphertext>,
+    cts_right: Vec<&Ciphertext>,
+) {
+    cts_left
+        .par_iter_mut()
+        .zip(cts_right.par_iter())
+        .for_each(|(ct_left, ct_right)| {
+            sk.unchecked_add_assign(ct_left, ct_right);
+        });
+}
+
+pub fn unchecked_add_packed(
+    sk: &tfhe::shortint::ServerKey,
+    cts_left: Vec<&Ciphertext>,
+    cts_right: Vec<&Ciphertext>,
+) -> Vec<Ciphertext> {
+    let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
+    unchecked_add_packed_assign(sk, &mut results, cts_right);
+
+    results
+}
+
+pub fn unchecked_scalar_add_packed_assign(
+    sk: &tfhe::shortint::ServerKey,
+    cts: &mut Vec<Ciphertext>,
+    scalar: u8,
+) {
+    cts.par_iter_mut()
+        .for_each(|ct| sk.unchecked_scalar_add_assign(ct, scalar));
+}
+
+pub fn unchecked_scalar_add_packed(
+    sk: &tfhe::shortint::ServerKey,
+    cts: Vec<&Ciphertext>,
+    scalar: u8,
+) -> Vec<Ciphertext> {
+    let mut cts_result = cts.into_iter().cloned().collect();
+    unchecked_scalar_add_packed_assign(sk, &mut cts_result, scalar);
+    cts_result
+}
+
+pub fn unchecked_scalar_mul_packed_assign(
+    sk: &tfhe::shortint::ServerKey,
+    cts: &mut Vec<Ciphertext>,
+    scalar: u8,
+) {
+    cts.par_iter_mut()
+        .for_each(|ct| sk.unchecked_scalar_mul_assign(ct, scalar));
+}
+
+pub fn unchecked_scalar_mul_packed(
+    sk: &tfhe::shortint::ServerKey,
+    cts: Vec<&Ciphertext>,
+    scalar: u8,
+) -> Vec<Ciphertext> {
+    let mut results: Vec<Ciphertext> = cts.into_iter().cloned().collect();
+    unchecked_scalar_mul_packed_assign(sk, &mut results, scalar);
+
+    results
+}
+
+pub fn unchecked_sub_packed_assign(
+    sk: &tfhe::shortint::ServerKey,
+    cts_left: &mut Vec<Ciphertext>,
+    cts_right: Vec<&Ciphertext>,
+) {
+    cts_left
+        .par_iter_mut()
+        .zip(cts_right.par_iter())
+        .for_each(|(ct_left, ct_right)| {
+            sk.unchecked_sub_assign_with_correcting_term(ct_left, ct_right);
+        });
+}
+
+pub fn unchecked_sub_packed(
+    sk: &tfhe::shortint::ServerKey,
+    cts_left: Vec<&Ciphertext>,
+    cts_right: Vec<&Ciphertext>,
+) -> Vec<Ciphertext> {
+    let mut results: Vec<Ciphertext> = cts_left.into_iter().cloned().collect();
+    unchecked_sub_packed_assign(sk, &mut results, cts_right);
+
+    results
 }

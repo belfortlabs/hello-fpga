@@ -56,7 +56,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
-    let params: ClassicPBSParameters = tfhe::shortint::parameters::V0_11_PARAM_MESSAGE_LEUVENSHTEIN;
+    // security = 132 bits, p-fail = 2^-71.625
+    let mut v0_11_param_message_leuvenshtein =
+        tfhe::shortint::parameters::V0_11_PARAM_MESSAGE_2_CARRY_2_KS_PBS_TUNIFORM_2M64.clone();
+    v0_11_param_message_leuvenshtein.message_modulus = MessageModulus(16);
+    v0_11_param_message_leuvenshtein.carry_modulus = CarryModulus(1);
+
+    let params: ClassicPBSParameters = v0_11_param_message_leuvenshtein;
     let cks: ClientKey = ClientKey::new(params);
     let sks: ServerKey = ServerKey::new(&cks);
     let integer_server_key: IntegerServerKey =

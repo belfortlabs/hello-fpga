@@ -304,7 +304,8 @@ pub fn process_enc_query_enc_db(
                 let t = Instant::now();
 
                 // Check the first part of the character
-                let mut eq1 = sks.unchecked_sub_packed(
+                let mut eq1 = unchecked_sub_packed(
+                    &sks,
                     q1_vec.iter().collect(),
                     get_column(&db_enc_matrix, j - 1).iter().collect(),
                 );
@@ -319,10 +320,11 @@ pub fn process_enc_query_enc_db(
 
                 let eq1_ref: Vec<&Ciphertext> = eq1_lut.iter().collect(); // ?
 
-                eq1 = sks.unchecked_sub_packed(one_enc_vec_ref.clone(), eq1_ref);
+                eq1 = unchecked_sub_packed(&sks, one_enc_vec_ref.clone(), eq1_ref);
                 sks.unchecked_scalar_add_packed_assign(&mut eq1, 16);
 
-                let mut eq2 = sks.unchecked_sub_packed(
+                let mut eq2 = unchecked_sub_packed(
+                    &sks,
                     q2_vec.iter().collect(),
                     get_column(&db1_enc_matrix, j - 1).iter().collect(),
                 );
@@ -339,14 +341,15 @@ pub fn process_enc_query_enc_db(
                 let vin = extract_number_elements(&v_matrices, i, j - 1);
                 let hin = extract_number_elements(&h_matrices, i - 1, j);
 
-                let v1 = sks.unchecked_scalar_add_packed(vin.iter().collect(), 1);
-                let h1 = sks.unchecked_scalar_add_packed(hin.iter().collect(), 1);
+                let v1 = unchecked_scalar_add_packed(&sks, vin.iter().collect(), 1);
+                let h1 = unchecked_scalar_add_packed(&sks, hin.iter().collect(), 1);
 
                 let key1 = sks.unchecked_scalar_mul_packed(h1.iter().collect(), 3);
                 let key12 =
-                    sks.unchecked_add_packed(key1.iter().collect(), eq2_lut.iter().collect());
+                    unchecked_add_packed(&sks, key1.iter().collect(), eq2_lut.iter().collect());
 
-                let key = sks.unchecked_add_packed(key12.iter().collect(), v1.iter().collect());
+                let key =
+                    unchecked_add_packed(&sks, key12.iter().collect(), v1.iter().collect());
 
                 let mut ct_res = Vec::new();
 
@@ -362,8 +365,10 @@ pub fn process_enc_query_enc_db(
                     dbg_dec_vec.push(dec_tmp);
                 }
 
-                let v_res = sks.unchecked_sub_packed(ct_res.iter().collect(), hin.iter().collect());
-                let h_res = sks.unchecked_sub_packed(ct_res.iter().collect(), vin.iter().collect());
+                let v_res =
+                    unchecked_sub_packed(&sks, ct_res.iter().collect(), hin.iter().collect());
+                let h_res =
+                    unchecked_sub_packed(&sks, ct_res.iter().collect(), vin.iter().collect());
 
                 write_number_elements(&mut v_matrices, &v_res, i, j);
                 write_number_elements(&mut h_matrices, &h_res, i, j);
