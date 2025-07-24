@@ -4,7 +4,11 @@ use tfhe::shortint::prelude::*;
 
 use crate::data;
 use crate::enc_struct::EncStruct;
-use crate::util;
+use crate::util::{
+    self, unchecked_add_packed, unchecked_add_packed_assign, unchecked_scalar_add_packed,
+    unchecked_scalar_add_packed_assign, unchecked_scalar_mul_packed,
+    unchecked_scalar_mul_packed_assign, unchecked_sub_packed,
+};
 
 use pad::PadStr;
 use std::collections::HashMap;
@@ -319,16 +323,15 @@ impl App {
         for j in 1..enc_struct.max_factor {
             if usize::abs_diff(index, j) <= enc_struct.th {
                 // Check the first part of the character
-                let mut eq1 = enc_struct.sks.unchecked_sub_packed(
+                let mut eq1 = unchecked_sub_packed(
+                    &enc_struct.sks,
                     q1_vec.iter().collect(),
                     util::get_column(&enc_struct.db_enc_matrix, j - 1)
                         .iter()
                         .collect(),
                 );
 
-                enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed_assign(&mut eq1, 16);
+                unchecked_scalar_add_packed_assign(&enc_struct.sks, &mut eq1, 16);
 
                 let mut eq1_lut = Vec::new();
 
@@ -339,7 +342,7 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed_parallellized(
+                    let ct = enc_struct.sks.apply_lookup_table_packed(
                         eq1.iter().collect(),
                         &enc_struct.lut_1eq_vec_sw,
                     );
@@ -348,26 +351,21 @@ impl App {
 
                 let eq1_ref: Vec<&Ciphertext> = eq1_lut.iter().collect();
 
-                eq1 = enc_struct
-                    .sks
-                    .unchecked_sub_packed(one_enc_vec_ref.clone(), eq1_ref);
-                enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed_assign(&mut eq1, 16);
+                eq1 = unchecked_sub_packed(&enc_struct.sks, one_enc_vec_ref.clone(), eq1_ref);
 
-                let mut eq2 = enc_struct.sks.unchecked_sub_packed(
+                unchecked_scalar_add_packed_assign(&enc_struct.sks, &mut eq1, 16);
+
+                let mut eq2 = unchecked_sub_packed(
+                    &enc_struct.sks,
                     q2_vec.iter().collect(),
                     util::get_column(&enc_struct.db1_enc_matrix, j - 1)
                         .iter()
                         .collect(),
                 );
 
-                enc_struct
-                    .sks
-                    .unchecked_scalar_mul_packed_assign(&mut eq2, 2);
-                enc_struct
-                    .sks
-                    .unchecked_add_packed_assign(&mut eq2, eq1.iter().collect());
+                unchecked_scalar_mul_packed_assign(&enc_struct.sks, &mut eq2, 2);
+
+                unchecked_add_packed_assign(&enc_struct.sks, &mut eq2, eq1.iter().collect());
 
                 let mut eq2_lut = Vec::new();
 
@@ -378,7 +376,7 @@ impl App {
                         &enc_struct.lut_eq_vec_fpga,
                     );
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed_parallellized(
+                    let ct = enc_struct.sks.apply_lookup_table_packed(
                         eq2.iter().collect(),
                         &enc_struct.lut_eq_vec_sw,
                     );
@@ -388,23 +386,22 @@ impl App {
                 let vin = util::extract_number_elements(&enc_struct.v_matrices, index, j - 1);
                 let hin = util::extract_number_elements(&enc_struct.h_matrices, index - 1, j);
 
-                let v1 = enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed(vin.iter().collect(), 1);
-                let h1 = enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed(hin.iter().collect(), 1);
+                let v1 = unchecked_scalar_add_packed(&enc_struct.sks, vin.iter().collect(), 1);
+                let h1 = unchecked_scalar_add_packed(&enc_struct.sks, hin.iter().collect(), 1);
 
-                let key1 = enc_struct
-                    .sks
-                    .unchecked_scalar_mul_packed(h1.iter().collect(), 3);
-                let key12 = enc_struct
-                    .sks
-                    .unchecked_add_packed(key1.iter().collect(), eq2_lut.iter().collect());
+                let key1 = unchecked_scalar_mul_packed(&enc_struct.sks, h1.iter().collect(), 3);
 
-                let key = enc_struct
-                    .sks
-                    .unchecked_add_packed(key12.iter().collect(), v1.iter().collect());
+                let key12 = unchecked_add_packed(
+                    &enc_struct.sks,
+                    key1.iter().collect(),
+                    eq2_lut.iter().collect(),
+                );
+
+                let key = unchecked_add_packed(
+                    &enc_struct.sks,
+                    key12.iter().collect(),
+                    v1.iter().collect(),
+                );
 
                 let mut ct_res = Vec::new();
 
@@ -415,23 +412,25 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed_parallellized(
+                    let ct = enc_struct.sks.apply_lookup_table_packed(
                         key.iter().collect(),
                         &enc_struct.lut_min_vec_sw,
                     );
                     ct_res.extend(ct);
                 }
 
-                enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed_assign(&mut ct_res, 16);
+                unchecked_scalar_add_packed_assign(&enc_struct.sks, &mut ct_res, 16);
 
-                let v_res = enc_struct
-                    .sks
-                    .unchecked_sub_packed(ct_res.iter().collect(), hin.iter().collect());
-                let h_res = enc_struct
-                    .sks
-                    .unchecked_sub_packed(ct_res.iter().collect(), vin.iter().collect());
+                let v_res = unchecked_sub_packed(
+                    &enc_struct.sks,
+                    ct_res.iter().collect(),
+                    hin.iter().collect(),
+                );
+                let h_res = unchecked_sub_packed(
+                    &enc_struct.sks,
+                    ct_res.iter().collect(),
+                    vin.iter().collect(),
+                );
 
                 util::write_number_elements(&mut enc_struct.v_matrices, &v_res, index, j);
                 util::write_number_elements(&mut enc_struct.h_matrices, &h_res, index, j);
@@ -459,23 +458,22 @@ impl App {
                 let vin = util::extract_number_elements(&enc_struct.v_matrices, index, j - 1);
                 let hin = util::extract_number_elements(&enc_struct.h_matrices, index - 1, j);
 
-                let v1 = enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed(vin.iter().collect(), 1);
-                let h1 = enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed(hin.iter().collect(), 1);
+                let v1 = unchecked_scalar_add_packed(&enc_struct.sks, vin.iter().collect(), 1);
+                let h1 = unchecked_scalar_add_packed(&enc_struct.sks, hin.iter().collect(), 1);
 
-                let key1 = enc_struct
-                    .sks
-                    .unchecked_scalar_mul_packed(h1.iter().collect(), 3);
-                let key12 = enc_struct
-                    .sks
-                    .unchecked_add_packed(key1.iter().collect(), eq.iter().collect());
+                let key1 = unchecked_scalar_mul_packed(&enc_struct.sks, h1.iter().collect(), 3);
 
-                let key = enc_struct
-                    .sks
-                    .unchecked_add_packed(key12.iter().collect(), v1.iter().collect());
+                let key12 = unchecked_add_packed(
+                    &enc_struct.sks,
+                    key1.iter().collect(),
+                    eq.iter().collect(),
+                );
+
+                let key = unchecked_add_packed(
+                    &enc_struct.sks,
+                    key12.iter().collect(),
+                    v1.iter().collect(),
+                );
 
                 let mut ct_res: Vec<Ciphertext>;
                 if fpga_enable {
@@ -485,22 +483,24 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
-                    ct_res = enc_struct.sks.apply_lookup_table_packed_parallellized(
+                    ct_res = enc_struct.sks.apply_lookup_table_packed(
                         key.iter().collect(),
                         &enc_struct.lut_min_vec_sw,
                     );
                 }
 
-                enc_struct
-                    .sks
-                    .unchecked_scalar_add_packed_assign(&mut ct_res, 16);
+                unchecked_scalar_add_packed_assign(&enc_struct.sks, &mut ct_res, 16);
 
-                let v_res = enc_struct
-                    .sks
-                    .unchecked_sub_packed(ct_res.iter().collect(), hin.iter().collect());
-                let h_res = enc_struct
-                    .sks
-                    .unchecked_sub_packed(ct_res.iter().collect(), vin.iter().collect());
+                let v_res = unchecked_sub_packed(
+                    &enc_struct.sks,
+                    ct_res.iter().collect(),
+                    hin.iter().collect(),
+                );
+                let h_res = unchecked_sub_packed(
+                    &enc_struct.sks,
+                    ct_res.iter().collect(),
+                    vin.iter().collect(),
+                );
 
                 util::write_number_elements(&mut enc_struct.v_matrices, &v_res, index, j);
                 util::write_number_elements(&mut enc_struct.h_matrices, &h_res, index, j);
