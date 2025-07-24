@@ -72,7 +72,7 @@ cargo run --release --package example --bin weighted-sum
 cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
-Congratulations if the tutorial runs, you set-up the environment correctly! In case you run into any issues, please open an issue in this repo.
+You should see the result of the weighted-sum complete much faster with the FPGA feature! In case you run into any issues, please open an issue in this repo.
 
 ### Other demos
 
@@ -141,7 +141,7 @@ These are the only changes to your code to enable FPGA acceleration.
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
-This can be useful for development purposes or distributing access of the resources to multiple users.
+This can be useful for development purposes or distributing access of the resources to multiple applications or users.
 
 ```Rust
 let mut fpga_key = BelfortServerKey::from(&server_key);

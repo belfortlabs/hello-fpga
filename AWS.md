@@ -42,7 +42,7 @@ cargo run --release --package example --bin weighted-sum
 cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
-Congratulations if the tutorial runs, you set-up the environment correctly! In case you run into any issues, please open an issue in this repo.
+You should see the result of the weighted-sum complete much faster with the FPGA feature! In case you run into any issues, please open an issue in this repo.
 
 ## Other demos
 
