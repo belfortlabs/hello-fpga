@@ -78,7 +78,7 @@ The acceleration requires a `BelfortServerKey` created from the `server_key`, wh
 
 **Change 5 lines of code:**
 
-```Rust   
+```Rust
 /// Import dependencies                                         // Import dependencies
                                                           |     use tfhe::integer::fpga::BelfortServerKey;
 
@@ -136,10 +136,18 @@ cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
 cargo run --release --package tfhe-trivium --bin demo-shortint
 ```
 
+#### Leuvenshtein
+
+[The Leuvenshtein demo](/demos/leuvenshtein/README.md) contains a fuzzy matching algorithm in the FHE domain. Within the UI you can search for a string of famous characters in movie names Below you can find its execution command:
+
+```bash
+cargo run --release --package leuvenshtein --bin demo --features fpga
+```
+
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
-This can be useful for development purposes or distributing access of the resources to multiple users. 
+This can be useful for development purposes or distributing access of the resources to multiple users.
 
 ```Rust
 let mut fpga_key = BelfortServerKey::from(&server_key);
@@ -159,6 +167,11 @@ set_server_key(fpga_key);
 - Enabling the logger gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
+
+### Contributors
+
+- [Wouter Legiest](https://github.com/wouterlegiest), developer of the Leuvenshtein demo
+
 
 ### License
 
