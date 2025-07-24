@@ -5,8 +5,8 @@ use tfhe::shortint::prelude::*;
 use crate::data;
 use crate::enc_struct::EncStruct;
 use crate::util::{
-    self, unchecked_add_packed, unchecked_add_packed_assign, unchecked_scalar_add_packed,
-    unchecked_scalar_add_packed_assign, unchecked_scalar_mul_packed,
+    self, apply_lookup_table_packed, unchecked_add_packed, unchecked_add_packed_assign,
+    unchecked_scalar_add_packed, unchecked_scalar_add_packed_assign, unchecked_scalar_mul_packed,
     unchecked_scalar_mul_packed_assign, unchecked_sub_packed,
 };
 
@@ -342,7 +342,8 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed(
+                    let ct = apply_lookup_table_packed(
+                        &enc_struct.sks,
                         eq1.iter().collect(),
                         &enc_struct.lut_1eq_vec_sw,
                     );
@@ -376,7 +377,8 @@ impl App {
                         &enc_struct.lut_eq_vec_fpga,
                     );
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed(
+                    let ct = apply_lookup_table_packed(
+                        &enc_struct.sks,
                         eq2.iter().collect(),
                         &enc_struct.lut_eq_vec_sw,
                     );
@@ -412,7 +414,8 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
-                    let ct = enc_struct.sks.apply_lookup_table_packed(
+                    let ct = apply_lookup_table_packed(
+                        &enc_struct.sks,
                         key.iter().collect(),
                         &enc_struct.lut_min_vec_sw,
                     );
@@ -483,7 +486,8 @@ impl App {
                         .fpga_utils
                         .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
-                    ct_res = enc_struct.sks.apply_lookup_table_packed(
+                    ct_res = apply_lookup_table_packed(
+                        &enc_struct.sks,
                         key.iter().collect(),
                         &enc_struct.lut_min_vec_sw,
                     );
