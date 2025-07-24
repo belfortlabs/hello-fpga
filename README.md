@@ -72,13 +72,31 @@ cargo run --release --package example --bin weighted-sum
 cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
+Congratulations if the tutorial runs, you set-up the environment correctly! In case you run into any issues, please open an issue in this repo.
+
+### Other demos
+
+This repository also contains more comprehensive demo applications. Below you can find the applications and the related commands. They should be run from the root repository and expects an [initialized environment](#prepare-execution-environment).
+
+#### Trivium
+
+[The Trivium demo](/demos/trivium/README.md) contains the transciphering of trivium into FHE. Below you can find its execution command:
+
+```bash
+# With FPGA acceleration
+cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
+
+# Without FPGA acceleration
+cargo run --release --package tfhe-trivium --bin demo-shortint
+```
+
 ## How to migrate your code for FPGA acceleration?
 
 The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find a weighted-sum example with the code differences for both CPU and FPGA execution below.
 
 **Change 5 lines of code:**
 
-```Rust   
+```Rust
 /// Import dependencies                                         // Import dependencies
                                                           |     use tfhe::integer::fpga::BelfortServerKey;
 
@@ -120,26 +138,10 @@ emulate_fpga = ["tfhe/emulate_fpga"]
 
 These are the only changes to your code to enable FPGA acceleration.
 
-### Other demos
-
-This repository also contains more comprehensive demo applications. Below you can find the applications and the related commands. They should be run from the root repository and expects and [initialized environment](#prepare-execution-environment).
-
-#### Trivium
-
-[The Trivium demo](/demos/trivium/README.md) contains the transciphering of trivium into FHE. Below you can find its execution command:
-
-```bash
-# With FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
-
-# Without FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint
-```
-
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
-This can be useful for development purposes or distributing access of the resources to multiple users. 
+This can be useful for development purposes or distributing access of the resources to multiple users.
 
 ```Rust
 let mut fpga_key = BelfortServerKey::from(&server_key);
