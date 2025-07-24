@@ -4,6 +4,7 @@ use rayon::iter::*;
 
 use rayon::iter::IntoParallelRefMutIterator;
 use tfhe::shortint::prelude::*;
+use tfhe::shortint::server_key::LookupTableOwned;
 
 pub fn get_column(data: &Vec<Vec<Ciphertext>>, index: usize) -> Vec<Ciphertext> {
     let mut result = Vec::new();
@@ -57,6 +58,23 @@ pub fn write_number_elements(
     for i in 0..input.len() {
         data[i][x][y] = input[i].clone();
     }
+}
+
+pub fn apply_lookup_table_packed(
+    sk: &tfhe::shortint::ServerKey,
+    cts: Vec<&Ciphertext>,
+    accs: &[LookupTableOwned],
+) -> Vec<Ciphertext> {
+    let mut ct_res: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
+
+    ct_res
+        .par_iter_mut()
+        .zip(accs.par_iter())
+        .for_each(|(ct, acc)| {
+            sk.apply_lookup_table_assign(ct, acc);
+        });
+
+    ct_res
 }
 
 pub fn unchecked_add_packed_assign(
