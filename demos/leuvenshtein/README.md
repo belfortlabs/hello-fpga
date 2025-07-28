@@ -1,27 +1,18 @@
-# Leuvenshtein demo: Approximated db lookup
+# Leuvenshtein demo: Approximated DB Lookup
 
-Created by Wouter Legiest
+Created by [Wouter Legiest](https://github.com/wouterlegiest)
 
-Demo application to showcase the efficient processing of the Leuvenshtein algorithm on the Belfort FPGA's. The demo implements following aspects:
+Leuvenshtein is a fuzzy matching algorithm. Fuzzy matching is a technology to compare two strings while allowing a limited amount of mistakes. For example, it matches "Bilba Biggins" to "Bilbo Baggins". [Leuvenshtein](https://lirias.kuleuven.be/retrieve/797861) is a hand-crafted version of Levenshtein optimising its implementation for the FHE domain, enabling comparison of encrypted strings. This can be useful for applications, such as banking, government, health care, where data sensitivity is high. For further details, please check out the [publication](https://lirias.kuleuven.be/retrieve/797861).
+
+The demo application showcases the efficient processing of encrypted searches on the Belfort FPGAs. The demo implements following aspects:
 
 - Encrypted query search in an encrypted database of names
 - Plaintext query search in an encrypted database using preprocessing techniques
 - Execution of above situations, both on CPU and FPGA
 
-Citation:
-> Wouter Legiest, Jan-Pieter D'Anvers, Bojan Spasic, Nam-Luc Tran, & Ingrid Verbauwhede. (2025). Leuvenshtein: Efficient FHE-based Edit Distance Computation with Single Bootstrap per Cell.
+## Exeuction overview
 
-Current versions:
-tfhe-rs: 0.11.3
-branch: dev-wout
-
-## General overview
-
-The program completely runs in the terminal, hence it is OS independent and can be showcased anywhere in the world, while running on Belfort servers.
-
-Once the program starts, the screen will be cleared and will remain black for a period of time. During this time, the database is being preprocessed. After a while, the main menu will be displayed.
-
-## Usages
+The demo is a terminal based application, to be run on Belfort FPGA enabled servers, e.g. AWS F2 as instructed on the main [readme](../../README.md).
 
 Start up the program by running the following command:
 
@@ -29,7 +20,11 @@ Start up the program by running the following command:
 cargo run --release --package leuvenshtein --bin demo --features fpga
 ```
 
-The main menu will start to flicker when it starts. You can now choose `e` to execute a query on the CPU. Pressing `f` will have the same effect, but now the query is processed on the FPGAs. `q` quits the program.
+The app will start with a cleared screen, which will remain empty for a period of time. During this period, the database is being preprocessed. 
 
-If the query starts with `p:`, it is NOT encrypted and send in plaintext to the database. Resulting in an execution that is a third faster.
+After that, the main menu will appear flicker when it starts. As instructed on the menu:
 
+- `e` is to start a queary to be executed on multi-core CPU 
+- `f` is to start a queary to be executed on FPGAs
+- `q` quits the program
+- `p:` is to start a plaintext query on un-encrypted database, resulting in an execution that is a third faster.
