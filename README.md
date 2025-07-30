@@ -141,7 +141,7 @@ These are the only changes to your code to enable FPGA acceleration.
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
-This can be useful for development purposes or distributing access of the resources to multiple applications or users.
+This can be useful for development purposes or distributing access of the resources to multiple users. 
 
 ```Rust
 let mut fpga_key = BelfortServerKey::from(&server_key);
@@ -162,8 +162,15 @@ set_server_key(fpga_key);
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
 
+### Contributors
+
+- [Wouter Legiest](https://github.com/wouterlegiest), developer of the Leuvenshtein demo
+
+
 ### License
 
 Belfort's AMI is free to use only for development, research, prototyping, and experimentation purposes. However, for any commercial use of Belfort's AMI, companies must purchase Belfort’s commercial AMI license.
 
 This software is distributed under the **BSD 3-Clause Clear** license. Read [the license](LICENSE) for more details.
+
+Each demo contributed by independent developers includes its own license file in the corresponding folder.
