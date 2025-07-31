@@ -10,10 +10,8 @@
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-
 * The above copyright notice and this permission notice shall be included in
 * all copies or substantial portions of the Software.
-
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,7 +21,7 @@
 * SOFTWARE.
 */
 
-use enc_struct::EncStruct;
+use crate::enc_struct::EncStruct;
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Gauge, List, ListItem, Paragraph};
@@ -42,8 +40,9 @@ mod util;
 use crate::app::App;
 use crate::app::InputMode;
 
+#[cfg(feature = "fpga")]
 use tfhe::integer::fpga::BelfortServerKey;
-
+#[cfg(feature = "fpga")]
 use tfhe::integer::ServerKey as IntegerServerKey;
 
 use crossterm::{
@@ -81,6 +80,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+    let area = terminal.size()?; // This gets width and height
+
+    // Define your minimum size
+    let min_width = 100;
+    let min_height = 35;
+
+    if area.width < min_width || area.height < min_height {
+        let msg = format!(
+            "Terminal too small ({}x{}). Minimum size: {}x{}",
+            area.width, area.height, min_width, min_height
+        );
+
+        return Err(io::Error::new(io::ErrorKind::Unsupported, msg));
+    }
+
+    terminal.draw(|frame| app.draw(frame))?;
+
     // security = 132 bits, p-fail = 2^-71.625
     let mut v0_11_param_message_leuvenshtein =
         tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS.clone();
@@ -90,8 +106,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     let params: ClassicPBSParameters = v0_11_param_message_leuvenshtein;
     let cks: ClientKey = ClientKey::new(params);
     let sks: ServerKey = ServerKey::new(&cks);
+
+    #[cfg(feature = "fpga")]
     let integer_server_key: IntegerServerKey =
         tfhe::integer::ServerKey::new_radix_server_key_from_shortint(sks.clone());
+
+    #[cfg(feature = "fpga")]
     let mut fpga_key = BelfortServerKey::from(&integer_server_key);
 
     let db_size = data::NAME_LIST.len();
@@ -153,6 +173,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         db_enc_map: db_processed,
         sks,
         cks,
+        #[cfg(feature = "fpga")]
         fpga_key: &mut fpga_key,
         one_enc_vec: Vec::new(),
         v_matrices: Vec::new(),

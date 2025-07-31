@@ -10,10 +10,8 @@
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-
 * The above copyright notice and this permission notice shall be included in
 * all copies or substantial portions of the Software.
-
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,6 +21,7 @@
 * SOFTWARE.
 */
 
+#[cfg(feature = "fpga")]
 use tfhe::core_crypto::fpga::keyswitch_bootstrap::KeyswitchBootstrapPacked;
 use tfhe::core_crypto::fpga::lookup_vector::LookupVector;
 use tfhe::shortint::prelude::*;
@@ -38,6 +37,14 @@ use crate::util::{
 use pad::PadStr;
 use std::collections::HashMap;
 use std::time::Instant;
+
+use ratatui::{
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Style, Stylize},
+    text::{Line, Span, Text},
+    widgets::{Block, BorderType, Paragraph, Wrap},
+    Frame,
+};
 
 #[derive(Clone)]
 pub enum InputMode {
@@ -362,6 +369,7 @@ impl App {
 
                 if fpga_enable {
                     eq1_lut = eq1.clone();
+                    #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
                         .fpga_utils
@@ -397,6 +405,7 @@ impl App {
 
                 if fpga_enable {
                     eq2_lut = eq2.clone();
+                    #[cfg(feature = "fpga")]
                     enc_struct.fpga_key.apply_lookup_vector_packed_assign(
                         &mut eq2_lut,
                         &enc_struct.lut_eq_vec_fpga,
@@ -434,6 +443,7 @@ impl App {
 
                 if fpga_enable {
                     ct_res = key.clone();
+                    #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
                         .fpga_utils
@@ -506,6 +516,7 @@ impl App {
                 let mut ct_res: Vec<Ciphertext>;
                 if fpga_enable {
                     ct_res = key.clone();
+                    #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
                         .fpga_utils
@@ -643,5 +654,79 @@ impl App {
         self.progress_done.clear();
         self.input.clear();
         self.reset_cursor();
+    }
+
+    pub fn draw(&self, frame: &mut Frame) {
+        let area = frame.area();
+
+        let central_layout = Layout::default()
+            .direction(Direction::Vertical) // Divide vertically first
+            .constraints([
+                Constraint::Percentage(20), // Top 33%
+                Constraint::Percentage(60), // Middle 34% (slightly larger to ensure no gaps with rounding)
+                Constraint::Percentage(20), // Bottom 33%
+            ])
+            .split(area); // Split the 'content' area
+
+        let middle_row = central_layout[1]; // Get the middle horizontal band
+
+        let middle_column_layout = Layout::default()
+            .direction(Direction::Horizontal) // Then divide horizontally within the middle row
+            .constraints([
+                Constraint::Percentage(25), // Left 25%
+                Constraint::Percentage(50), // Middle 50%
+                Constraint::Percentage(25), // Right 25%
+            ])
+            .split(middle_row);
+
+        let middle_block_area = middle_column_layout[1];
+
+        let block = Block::bordered().border_type(BorderType::Rounded);
+
+        let text = Text::from(vec![
+            Line::from("Created by Wouter Legiest, COSIC - KU Leuven"),
+            Line::from(""),
+            Line::from("Accelerated on FPGA by Belfort"),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Leuvenshtein Database Demo",
+                Style::default().fg(Color::Yellow).bold(),
+            )),
+            Line::from(""), // Empty line for spacing
+            Line::from(Span::styled(
+                "Preprocessing",
+                Style::default().italic().bold().slow_blink(),
+            )),
+            Line::from(vec![Span::styled(
+                "Encrypting and processing the database",
+                Style::default(),
+            )]),
+            Line::from(""),
+            #[cfg(not(feature = "fpga"))]
+            Line::from(vec![Span::styled(
+                "NO FPGA SUPPORT, ADD `fpga` FEATURE",
+                Style::default().fg(Color::Red).bold(),
+            )]),
+            Line::from(""),
+            Line::from("This demo lets you search for movie characters, e.g. Biff Tannen, Hans Gruber, Indiana Jones, etc. "),
+                Line::from("You can search your favourite character, even if your input contains typos; “Bilba Biggins” will match “Bilbo Baggins”"),
+            Line::from(""),
+        ]);
+
+        let text_lines = text.lines.len() as u16;
+        let available_height = middle_block_area.height;
+        let top_padding = (available_height.saturating_sub(text_lines) as f32 * 0.33) as u16;
+
+        let mut padded_lines = Vec::new();
+        for _ in 0..top_padding {
+            padded_lines.push(Line::from(""));
+        }
+        padded_lines.extend(text.lines.clone());
+
+        let paragraph = Paragraph::new(padded_lines)
+            .block(block)
+            .centered()
+            .wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, middle_block_area);
     }
 }
