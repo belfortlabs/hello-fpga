@@ -31,7 +31,7 @@ fn main() {
     let t = Instant::now();
     let result = hello_world_clean_xsmall_test_rs_lib::fn_under_test(&input_vec);
     let elapsed = t.elapsed();
-    println!("Time elapsed: {:?}", elapsed.as_secs_f32());
+    println!("Time elapsed: {:?}s", elapsed.as_secs_f32());
 
     let output: u16 = result[0][0].decrypt(&client_key);
     assert_eq!(output, input as u16 * 9 + 1);
