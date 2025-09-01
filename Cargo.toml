@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["tutorials", "demos/trivium", "demos/erc20", "demos/leuvenshtein"]
+members = ["tutorials", "demos/trivium", "demos/erc20", "demos/leuvenshtein", "demos/fhe-aes"]
 
 [workspace.dependencies]
 tfhe = { path = "../tfhe-rs/tfhe", features = [
