@@ -78,17 +78,26 @@ You should see the result of the weighted-sum complete much faster with the FPGA
 
 This repository also contains more comprehensive demo applications. Below you can find the applications and the related commands. They should be run from the root repository and expects an [initialized environment](#prepare-execution-environment).
 
-#### Trivium
+#### AES
 
-[The Trivium demo](/demos/trivium/README.md) contains the transciphering of trivium into FHE. Below you can find its execution command:
+[AES demo](/demos/fhe-aes/README.md) implements the transciphering of AES into FHE. You can run the interactive demo with:
 
 ```bash
-# With FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
-
-# Without FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint
+cargo run --release --package fhe-aes --bin demo --features fpga
 ```
+
+#### Leuvenshtein
+
+[Leuvenshtein demo](/demos/leuvenshtein/README.md) implements the fuzzy matching algorithm to compare two strings while allowing a limited amount of mistakes. You can run the interactive demo with:
+
+```bash
+cargo run --release --package leuvenshtein --bin demo --features fpga
+```
+
+#### Other Demos:
+
+- [ERC20 demo](/demos/erc20/README.md) is a terminal-based Rust demo that visualizes encrypted ERC20-like token transactions.
+- [Trivium demo](/demos/trivium/README.md) for the transciphering of trivium into FHE.
 
 ## How to migrate your code for FPGA acceleration?
 
