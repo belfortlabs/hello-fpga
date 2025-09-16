@@ -1,5 +1,5 @@
 # Transciphering: A Homomorphic AES Evaluation using TFHE
-Created by [Beren Aydoğan](https://github.com/wouterlegiest)
+Created by [Beren Aydoğan](https://github.com/berenaydogan)
 
 Transciphering is a technique that allows symmetrically encrypted data to be processed using fully homomorphic encryption (FHE), without revealing the underlying plaintext. 
 
