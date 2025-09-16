@@ -32,14 +32,15 @@ In your communication to AWS, please pay attention that the F2 access permission
 
 ### Launch an F2 instance
 
-Launch an AWS EC2 F2 instance based on our public Amazon Machine Image (AMI).
+Open the [Amazon EC2 Console](https://console.aws.amazon.com/ec2/) and launch an AWS EC2 F2 instance based on Belfort public AMI (Amazon Machine Image).
 
-- AMI: [Belfort FPGA Acceleration AMI](https://aws.amazon.com/marketplace/pp/prodview-imfiyzy7svjgu) on the AWS Marketplace.
+Upon need a guide for AWS console, check this [tutorial](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/tutorial-launch-a-test-ec2-instance.html#tut2-task-4-launch-test-instance).
+
+AMI: [Belfort FPGA Acceleration AMI](https://aws.amazon.com/marketplace/pp/prodview-imfiyzy7svjgu) on the AWS Marketplace.
   - This AMI by Belfort is ready-to-use.
-  - It's free of charge, but AWS EC2 fees apply
-- Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
+  - It's free of charge, though using AWS EC2 comes with its own fees.
 
-Pick the instance type depending on how much FPGA acceleration you want;
+Instance types: pick one below depending on the FPGA acceleration you demand
   - `f2.6xlarge` for 1 FPGA (requires access to 24 vCPUs)
   - `f2.12xlarge` for 2 FPGAs (requires access to 48 vCPUs)
   - `f2.48xlarge` for 8 FPGAs (requires access to 192 vCPUs)
@@ -105,6 +106,9 @@ The acceleration requires a `BelfortServerKey` created from the `server_key`, wh
 
 **Change 5 lines of code:**
 
+The changes focus solely on key creation, which is standard for every TFHE application. The modifications are limited to using `fpga_key` as your `server_key`. All other computation code remains unchanged and will automatically benefit from FPGA acceleration.
+
+
 ```Rust
 /// Import dependencies                                         // Import dependencies
                                                           |     use tfhe::integer::fpga::BelfortServerKey;
@@ -167,7 +171,7 @@ set_server_key(fpga_key);
                     and the FPGAs are in a bad state.
 - **In case you run your programs without the fpga's programmed, you will get segmentation faults.**
 - Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
-- Enabling the logger gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
+- Enabling the logger ([as in env_logger::init(); in the tutorial](./tutorials/src/main.rs#L12)) gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
 
