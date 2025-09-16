@@ -1,6 +1,6 @@
 # Leuvenshtein demo: Approximated DB Lookup
 
-Created by [Wouter Legiest](https://github.com/wouterlegiest)
+Created by [Wouter Legiest](https://github.com/woutlegiest)
 
 Leuvenshtein is a fuzzy matching algorithm. Fuzzy matching is a technology to compare two strings while allowing a limited amount of mistakes. For example, it matches "Bilba Biggins" to "Bilbo Baggins". [Leuvenshtein](https://eprint.iacr.org/2025/012) is a hand-crafted version of Levenshtein optimising its implementation for the FHE domain, enabling comparison of encrypted strings. This can be useful for applications, such as banking, government, health care, where data sensitivity is high. For further details, please check out the [publication](https://eprint.iacr.org/2025/012).
 
