@@ -24218,3 +24218,100 @@ index 4090e73b2..bc3ff3a56 100644
    // 320 bits is a use case we have, 8 bits per byte
    const metadata = new Uint8Array(320 / 8);
    crypto.getRandomValues(metadata);
+diff --git a/tfhe/src/high_level_api/keys/inner.rs b/tfhe/src/high_level_api/keys/inner.rs
+index eb9d7a8d8..86783b71c 100644
+--- a/tfhe/src/high_level_api/keys/inner.rs
++++ b/tfhe/src/high_level_api/keys/inner.rs
+@@ -206,7 +206,7 @@ impl From<IntegerConfig> for IntegerClientKey {
+ #[derive(Clone, serde::Serialize, serde::Deserialize, Versionize)]
+ #[versionize(IntegerServerKeyVersions)]
+ pub struct IntegerServerKey {
+-    pub(crate) key: crate::integer::ServerKey,
++    pub key: crate::integer::ServerKey,
+     // Storing a KeySwitchingKeyView would require a self reference -> nightmare
+     // Storing a KeySwitchingKey would mean cloning the ServerKey and means more memory traffic to
+     // fetch the exact same key, so we store the part of the key that are not ServerKeys and we
+diff --git a/tfhe/src/integer/server_key/mod.rs b/tfhe/src/integer/server_key/mod.rs
+index d554d85cd..a62e2b50d 100644
+--- a/tfhe/src/integer/server_key/mod.rs
++++ b/tfhe/src/integer/server_key/mod.rs
+@@ -32,7 +32,7 @@ use tfhe_versionable::Versionize;
+ #[derive(Serialize, Deserialize, Clone, Versionize)]
+ #[versionize(ServerKeyVersions)]
+ pub struct ServerKey {
+-    pub(crate) key: crate::shortint::ServerKey,
++    pub key: crate::shortint::ServerKey,
+ }
+ 
+ impl From<ServerKey> for crate::shortint::ServerKey {
+diff --git a/tfhe-csprng/src/generators/aes_ctr/parallel.rs b/tfhe-csprng/src/generators/aes_ctr/parallel.rs
+index 073f2747f..b66f9e918 100644
+--- a/tfhe-csprng/src/generators/aes_ctr/parallel.rs
++++ b/tfhe-csprng/src/generators/aes_ctr/parallel.rs
+@@ -43,7 +43,7 @@ impl<BlockCipher: AesBlockCipher> AesCtrGenerator<BlockCipher> {
+         let first_index = self.state.table_index().incremented();
+         let output = (0..n_children.0)
+             .into_par_iter()
+-            .zip(rayon::iter::repeatn(
++            .zip(rayon::iter::repeat_n(
+                 (self.block_cipher.clone(), first_index, n_bytes),
+                 n_children.0,
+             ))
+diff --git a/tfhe/src/core_crypto/commons/traits/contiguous_entity_container.rs b/tfhe/src/core_crypto/commons/traits/contiguous_entity_container.rs
+index 89e83d9c3..21eddae73 100644
+--- a/tfhe/src/core_crypto/commons/traits/contiguous_entity_container.rs
++++ b/tfhe/src/core_crypto/commons/traits/contiguous_entity_container.rs
+@@ -257,7 +257,7 @@ pub trait ContiguousEntityContainer: AsRef<[Self::Element]> {
+         let entity_view_pod_size = self.get_entity_view_pod_size();
+         self.as_ref()
+             .par_chunks_exact(entity_view_pod_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::EntityView::<'this>::create_from(elt, meta))
+     }
+ 
+@@ -278,7 +278,7 @@ pub trait ContiguousEntityContainer: AsRef<[Self::Element]> {
+         let meta = self.get_self_view_creation_metadata();
+         self.as_ref()
+             .par_chunks(pod_chunk_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::SelfView::<'_>::create_from(elt, meta))
+     }
+ 
+@@ -304,7 +304,7 @@ pub trait ContiguousEntityContainer: AsRef<[Self::Element]> {
+         let meta = self.get_self_view_creation_metadata();
+         self.as_ref()
+             .par_chunks_exact(pod_chunk_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::SelfView::<'_>::create_from(elt, meta))
+     }
+ }
+@@ -471,7 +471,7 @@ pub trait ContiguousEntityContainerMut: ContiguousEntityContainer + AsMut<[Self:
+         let entity_view_pod_size = self.get_entity_view_pod_size();
+         self.as_mut()
+             .par_chunks_exact_mut(entity_view_pod_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::EntityMutView::<'this>::create_from(elt, meta))
+     }
+ 
+@@ -492,7 +492,7 @@ pub trait ContiguousEntityContainerMut: ContiguousEntityContainer + AsMut<[Self:
+         let meta = self.get_self_view_creation_metadata();
+         self.as_mut()
+             .par_chunks_mut(pod_chunk_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::SelfMutView::<'_>::create_from(elt, meta))
+     }
+ 
+@@ -518,7 +518,7 @@ pub trait ContiguousEntityContainerMut: ContiguousEntityContainer + AsMut<[Self:
+         let meta = self.get_self_view_creation_metadata();
+         self.as_mut()
+             .par_chunks_exact_mut(pod_chunk_size)
+-            .zip(rayon::iter::repeatn(meta, entity_count))
++            .zip(rayon::iter::repeat_n(meta, entity_count))
+             .map(|(elt, meta)| Self::SelfMutView::<'_>::create_from(elt, meta))
+     }
+ }
