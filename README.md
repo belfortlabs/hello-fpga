@@ -177,7 +177,7 @@ set_server_key(fpga_key);
 
 ### Contributors
 
-- [Wouter Legiest](https://github.com/wouterlegiest), developer of the Leuvenshtein demo
+- [Wouter Legiest](https://github.com/woutlegiest), developer of the Leuvenshtein demo
 - [Beren Aydoğan](https://github.com/berenaydogan), developer of the AES demo
 
 
