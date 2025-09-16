@@ -42,7 +42,7 @@ A terminal-based application showcases transciphering from AES to FHE, after whi
 Make sure you are on a server with FPGA support (e.g., AWS F2). Then start the program by running:
 
 ```bash
-cargo run --release --package aes --bin demo --features fpga
+cargo run --release --package fhe-aes --bin demo --features fpga
 ```
 
 Follow the on-screen logs for:
