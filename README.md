@@ -55,6 +55,10 @@ ssh -i <id.pem> ubuntu@<instance_public_dns>
 
 2. Clone this repo into your AWS instance
 
+```bash
+git clone https://github.com/belfortlabs/hello-fpga.git
+```
+
 3. Run `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
 
 ```bash
