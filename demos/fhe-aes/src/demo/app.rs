@@ -24,7 +24,7 @@ use crate::demo::{
     ui::{
         drawer::Drawer,
         layout::LayoutManager,
-        widgets::{InputBox, OutputBox},
+        widgets::TextBox,
         worker::{WorkerManager, WorkerMsg},
     },
 };
@@ -39,9 +39,9 @@ pub struct App {
     pub(crate) last_size: (u16, u16),
     pub(crate) too_small: bool,
 
-    pub(crate) client_box: OutputBox,
-    pub(crate) server_box: OutputBox,
-    pub(crate) result_box: OutputBox,
+    pub(crate) client_box: TextBox,
+    pub(crate) server_box: TextBox,
+    pub(crate) result_box: TextBox,
 
     pub(crate) client_history: Vec<(String, Color)>,
     pub(crate) server_history: Vec<(String, Color)>,
@@ -69,9 +69,9 @@ impl App {
             last_size: original_size,
             too_small: false,
 
-            client_box: OutputBox::empty(),
-            server_box: OutputBox::empty(),
-            result_box: OutputBox::empty(),
+            client_box: TextBox::empty(),
+            server_box: TextBox::empty(),
+            result_box: TextBox::empty(),
 
             client_history: Vec::new(),
             server_history: Vec::new(),
@@ -205,7 +205,7 @@ impl App {
             OPERAND_TWO_FROM_LEFT
         };
 
-        let mut input_box = InputBox::new(
+        let mut input_box = TextBox::new(
             (
                 self.offsets.0 + from_left,
                 self.offsets.1 + OPERAND_AND_RESULT_BOXES_FROM_TOP,
@@ -304,7 +304,7 @@ impl App {
     }
 
     pub(crate) fn build_ui_boxes(&mut self) -> Result<()> {
-        self.client_box = OutputBox::new(
+        self.client_box = TextBox::new(
             (
                 CLIENT_BOX_FROM_LEFT + self.offsets.0,
                 CLIENT_BOX_FROM_TOP + self.offsets.1,
@@ -315,7 +315,7 @@ impl App {
         );
         self.client_box.draw(&mut self.stdout)?;
 
-        self.server_box = OutputBox::new(
+        self.server_box = TextBox::new(
             (
                 SERVER_BOX_FROM_LEFT + self.offsets.0,
                 SERVER_BOX_FROM_TOP + self.offsets.1,
@@ -326,7 +326,7 @@ impl App {
         );
         self.server_box.draw(&mut self.stdout)?;
 
-        self.result_box = OutputBox::new(
+        self.result_box = TextBox::new(
             (
                 RESULT_BOX_FROM_LEFT + self.offsets.0,
                 OPERAND_AND_RESULT_BOXES_FROM_TOP + self.offsets.1,

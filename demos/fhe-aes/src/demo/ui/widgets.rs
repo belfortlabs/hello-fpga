@@ -8,94 +8,16 @@ use crossterm::{
 
 use crate::demo::constants::{CLIENT_SERVER_BOX_PAD, INDENTED_STEPS_COLOR, INPUTS_COLOR};
 
-pub(crate) struct InputBox {
-    origin: (u16, u16),
-    width: u16,
-    height: u16,
-    label: &'static str,
-    buf: String,
-}
-
-pub(crate) struct OutputBox {
+pub(crate) struct TextBox {
     origin: (u16, u16),
     width: u16,
     height: u16,
     label: &'static str,
     current_line: u16,
+    input_buffer: Option<String>,
 }
 
-impl InputBox {
-    pub(crate) fn new(origin: (u16, u16), width: u16, height: u16, label: &'static str) -> Self {
-        Self {
-            origin,
-            width,
-            height,
-            label,
-            buf: String::new(),
-        }
-    }
-
-    pub(crate) fn set_origin(&mut self, origin: (u16, u16)) {
-        self.origin = origin;
-    }
-
-    pub(crate) fn get_mut_buf(&mut self) -> &mut String {
-        &mut self.buf
-    }
-
-    pub(crate) fn draw(&self, stdout: &mut Stdout) -> Result<()> {
-        let (x, y) = self.origin;
-
-        stdout
-            .queue(MoveTo(x, y))?
-            .queue(PrintStyledContent(style("┌").with(INDENTED_STEPS_COLOR)))?
-            .queue(PrintStyledContent(
-                style("─".repeat((self.width - 2) as usize)).with(INDENTED_STEPS_COLOR),
-            ))?
-            .queue(PrintStyledContent(style("┐").with(INDENTED_STEPS_COLOR)))?;
-
-        for row in 1..self.height - 1 {
-            stdout
-                .queue(MoveTo(x, y + row))?
-                .queue(PrintStyledContent(style("│").with(INDENTED_STEPS_COLOR)))?
-                .queue(MoveTo(x + self.width - 1, y + row))?
-                .queue(PrintStyledContent(style("│").with(INDENTED_STEPS_COLOR)))?;
-        }
-
-        stdout
-            .queue(MoveTo(x, y + self.height - 1))?
-            .queue(PrintStyledContent(style("└").with(INDENTED_STEPS_COLOR)))?
-            .queue(PrintStyledContent(
-                style("─".repeat((self.width - 2) as usize)).with(INDENTED_STEPS_COLOR),
-            ))?
-            .queue(PrintStyledContent(style("┘").with(INDENTED_STEPS_COLOR)))?;
-
-        stdout
-            .queue(MoveTo(x + 2, y))?
-            .queue(PrintStyledContent(
-                style(self.label).with(INDENTED_STEPS_COLOR),
-            ))?
-            .flush()?;
-
-        Ok(())
-    }
-
-    pub(crate) fn render(&self, out: &mut Stdout) -> Result<()> {
-        let (x, y) = self.origin;
-        let max = (self.width - 3) as usize;
-        let printable = format!(
-            "{:<width$}",
-            &self.buf[..self.buf.len().min(max)],
-            width = max
-        );
-
-        out.queue(MoveTo(x + 2, y + 1))?
-            .queue(PrintStyledContent(style(printable).with(INPUTS_COLOR)))?
-            .flush()
-    }
-}
-
-impl OutputBox {
+impl TextBox {
     pub(crate) fn empty() -> Self {
         Self {
             origin: (0, 0),
@@ -103,6 +25,7 @@ impl OutputBox {
             height: 0,
             label: "",
             current_line: 0,
+            input_buffer: None,
         }
     }
 
@@ -113,6 +36,7 @@ impl OutputBox {
             height,
             label,
             current_line: 0,
+            input_buffer: Some(String::from("")),
         }
     }
 
@@ -120,8 +44,24 @@ impl OutputBox {
         self.origin
     }
 
+    pub(crate) fn set_origin(&mut self, origin: (u16, u16)) {
+        self.origin = origin;
+    }
+
+    pub(crate) fn get_mut_buf(&mut self) -> &mut String {
+        self.input_buffer.as_mut().unwrap()
+    }
+
     pub(crate) fn get_width(&self) -> u16 {
         self.width
+    }
+
+    pub(crate) fn right_edge_x(&self) -> u16 {
+        self.origin.0 + self.width - CLIENT_SERVER_BOX_PAD
+    }
+
+    pub(crate) fn current_line_idx(&self) -> u16 {
+        self.current_line.saturating_sub(1)
     }
 
     pub(crate) fn draw(&self, stdout: &mut Stdout) -> Result<()> {
@@ -205,11 +145,14 @@ impl OutputBox {
         Ok(())
     }
 
-    pub(crate) fn right_edge_x(&self) -> u16 {
-        self.origin.0 + self.width - CLIENT_SERVER_BOX_PAD
-    }
+    pub(crate) fn render(&self, out: &mut Stdout) -> Result<()> {
+        let (x, y) = self.origin;
+        let max = (self.width - 3) as usize;
+        let buf = self.input_buffer.as_ref().unwrap();
+        let printable = format!("{:<width$}", &buf[..buf.len().min(max)], width = max);
 
-    pub(crate) fn current_line_idx(&self) -> u16 {
-        self.current_line.saturating_sub(1)
+        out.queue(MoveTo(x + 2, y + 1))?
+            .queue(PrintStyledContent(style(printable).with(INPUTS_COLOR)))?
+            .flush()
     }
 }
