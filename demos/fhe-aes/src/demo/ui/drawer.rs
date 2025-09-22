@@ -6,7 +6,8 @@ use crossterm::style::{PrintStyledContent, Stylize, style};
 use crossterm::{QueueableCommand, execute};
 
 use crate::demo::constants::{
-    EQUALITY_COLOR, ERROR_COLOR, HINT_COLOR, INDENTED_STEPS_COLOR, INPUTS_COLOR, INST_COLOR, NEWS_COLOR, OPERAND_RESULT_BOX_HEIGHT, PLUS_COLOR, RESULT_COLOR, SPIN_FRAMES
+    EQUALITY_COLOR, ERROR_COLOR, HINT_COLOR, INDENTED_STEPS_COLOR, INPUTS_COLOR, INST_COLOR,
+    NEWS_COLOR, OPERAND_RESULT_BOX_HEIGHT, PLUS_COLOR, RESULT_COLOR, SPIN_FRAMES,
 };
 use crate::demo::ui::worker::LogKind;
 use crate::demo::{
@@ -116,8 +117,8 @@ impl Drawer for App {
             MoveTo(
                 INSTRUCTION_FROM_LEFT + self.offsets.0,
                 INSTRUCTION_FROM_TOP + self.offsets.1 + 1
-            ), 
-            PrintStyledContent(style("Overflow may occur if the sum exceeds 2¹²⁸ - 1.").with(INST_COLOR))
+            ),
+            PrintStyledContent(style("The demo supports up to 64-bit operands.").with(INST_COLOR))
         )
     }
 
@@ -158,14 +159,10 @@ impl Drawer for App {
                 self.server_box.get_origin().1,
             ),
         };
-        
+
         let y = base_y + 1 + line_idx;
         let mark = if ok { "✓" } else { "✗" };
-        let color = if ok {
-            NEWS_COLOR
-        } else {
-            ERROR_COLOR
-        };
+        let color = if ok { NEWS_COLOR } else { ERROR_COLOR };
 
         self.stdout
             .queue(MoveTo(right_x, y))?
@@ -207,12 +204,12 @@ impl Drawer for App {
             self.draw_equality()?;
             match res {
                 Ok(v) => {
-                    self
-                        .result_box
+                    self.result_box
                         .log(&mut self.stdout, &v.to_string(), RESULT_COLOR)?;
                 }
                 Err(_) => {
-                    self.result_box.log(&mut self.stdout, "Error", ERROR_COLOR)?;
+                    self.result_box
+                        .log(&mut self.stdout, "Error", ERROR_COLOR)?;
                 }
             }
         }
@@ -221,18 +218,24 @@ impl Drawer for App {
         for m in self.finished_marks.clone() {
             self.draw_mark_at(m.get_kind(), m.get_line_idx(), m.is_ok())?;
         }
-        
+
         if !self.too_small {
             for spinner in &self.spinners {
                 let (right_x, base_y) = match spinner.get_kind() {
-                    LogKind::Client => (self.client_box.right_edge_x(), self.client_box.get_origin().1),
-                    LogKind::Server => (self.server_box.right_edge_x(), self.server_box.get_origin().1),
+                    LogKind::Client => (
+                        self.client_box.right_edge_x(),
+                        self.client_box.get_origin().1,
+                    ),
+                    LogKind::Server => (
+                        self.server_box.right_edge_x(),
+                        self.server_box.get_origin().1,
+                    ),
                 };
                 let y = base_y + 1 + spinner.get_line_idx();
                 let ch = SPIN_FRAMES[spinner.get_frame() % SPIN_FRAMES.len()];
-                self.stdout
-                    .queue(MoveTo(right_x, y))?
-                    .queue(crossterm::style::PrintStyledContent(style(ch).with(spinner.get_color())))?;
+                self.stdout.queue(MoveTo(right_x, y))?.queue(
+                    crossterm::style::PrintStyledContent(style(ch).with(spinner.get_color())),
+                )?;
             }
             self.stdout.flush()?;
         }
