@@ -4,7 +4,7 @@ use crossterm::style::Color;
 
 pub(crate) const TERMINAL_POLL_MS: u64 = 50;
 
-pub(crate) const OPERAND_RESULT_BOX_WIDTH: u16 = 31;
+pub(crate) const OPERAND_RESULT_BOX_WIDTH: u16 = 33;
 pub(crate) const OPERAND_RESULT_BOX_HEIGHT: u16 = 3;
 
 pub(crate) const CLIENT_SERVER_BOX_WIDTH: u16 = 58;
