@@ -291,18 +291,6 @@ pub fn split_chunks_even_odd(
     (even_chunks, odd_chunks)
 }
 
-/// Repeats a single lookup vector a specified number of times.
-///
-/// # Arguments
-/// - base: "LookupVector" to be repeated.
-/// - repeat_count: How many times to repeat the "base".
-///
-/// # Returns
-/// A "Vec<LookupVector>" containing "repeat_count" copies of "base".
-pub fn repeat_lut(base: LookupVector, repeat_count: usize) -> Vec<LookupVector> {
-    repeat_n(base, repeat_count).collect()
-}
-
 /// Repeats a vector of lookup vectors in a cyclic pattern to reach a desired total length.
 ///
 /// # Arguments
@@ -311,12 +299,11 @@ pub fn repeat_lut(base: LookupVector, repeat_count: usize) -> Vec<LookupVector> 
 ///
 /// # Returns
 /// A "Vec<LookupVector>" of length "base.len() * repeat_count".
-pub fn repeat_luts_cycled(base: &[LookupVector], repeat_count: usize) -> Vec<LookupVector> {
+pub fn repeat_luts_cycled(base: &[LookupVector], repeat_count: usize) -> Vec<&LookupVector> {
     let base_len = base.len();
 
     let packed_luts = base
         .iter()
-        .cloned()
         .cycle()
         .take(base_len * repeat_count)
         .collect::<Vec<_>>();

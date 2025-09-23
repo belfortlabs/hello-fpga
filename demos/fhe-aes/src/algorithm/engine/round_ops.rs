@@ -37,7 +37,7 @@ impl FheAesEngine<'_> {
 
         self.fpga_key.apply_same_lookup_vector_packed_assign(
             &mut xor_inputs_per_column,
-            self.lookup.lut_bitxor(),
+            &self.lookup.lut_bitxor(),
         );
 
         let xor_pairs: Vec<Vec<_>> = xor_inputs_per_column
@@ -73,7 +73,7 @@ impl FheAesEngine<'_> {
 
         self.fpga_key.apply_same_lookup_vector_packed_assign(
             &mut full_column_xor_in_blocks,
-            self.lookup.lut_bitxor(),
+            &self.lookup.lut_bitxor(),
         );
 
         let full_column_xor: Vec<_> = full_column_xor_in_blocks
@@ -91,7 +91,8 @@ impl FheAesEngine<'_> {
 
         let mut expanded_transforms = self.fpga_key.expand_lo_hi_batch(&transformed_rows);
 
-        let mul2_luts = repeat_luts_cycled(&self.lookup.mul2_base(), BYTES_IN_STATE);
+        let mul2_luts = self.lookup.mul2_base();
+        let mul2_luts = repeat_luts_cycled(&mul2_luts, BYTES_IN_STATE);
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut expanded_transforms, &mul2_luts);
@@ -104,7 +105,7 @@ impl FheAesEngine<'_> {
             .pack_slices(&mul2_with_lower_bits, &mul2_with_higher_bits);
         self.fpga_key.apply_same_lookup_vector_packed_assign(
             &mut xor_shifted_mul,
-            self.lookup.lut_bitxor(),
+            &self.lookup.lut_bitxor(),
         );
 
         // XOR the multiplied XORs for each column with its corresponding full column XOR.
@@ -128,7 +129,7 @@ impl FheAesEngine<'_> {
         }
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_step1, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut xor_step1, &self.lookup.lut_bitxor());
 
         // XOR the results from the first XOR step with their corresponding state elements.
         let mut xor_step2 = Vec::with_capacity(BLOCKS_IN_STATE);
@@ -143,7 +144,7 @@ impl FheAesEngine<'_> {
         }
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_step2, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut xor_step2, &self.lookup.lut_bitxor());
 
         state.state_from_row_major_in_blocks_assign(&xor_step2);
     }
@@ -210,7 +211,7 @@ impl FheAesEngine<'_> {
         let mut packed = self.fpga_key.pack_slices(&round_key, &col_major_state);
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut packed, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut packed, &self.lookup.lut_bitxor());
 
         state.state_from_column_major_in_blocks_assign(&packed);
     }

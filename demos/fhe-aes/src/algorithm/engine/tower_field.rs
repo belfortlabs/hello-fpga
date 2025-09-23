@@ -7,7 +7,7 @@ use crate::algorithm::{
     lookup::FheAesLookup,
     utils::{
         FheAesCiphertextUtils, interleave_chunks_of_two, interleave_low_high, repeat_each,
-        repeat_lut, repeat_luts_cycled, split_by_chunk_sizes, split_chunks_even_odd,
+        repeat_luts_cycled, split_by_chunk_sizes, split_chunks_even_odd,
     },
 };
 
@@ -42,7 +42,7 @@ impl<'a> FheAesTowerField<'a> {
         *inputs = self.fpga_key.pack_slices(&even_chunks, &odd_chunks);
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(inputs, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(inputs, &self.lookup.lut_bitxor());
     }
 
     /// Multiplies one operand pair (x, y) in GF(2⁴).
@@ -71,12 +71,12 @@ impl<'a> FheAesTowerField<'a> {
         ]
         .concat();
 
+        let lut_bitxor_with_fwd_transf = self.lookup.bitxor_with_fwd_transf();
+        let lut_fwd = [self.lookup.fwd_lo(), self.lookup.fwd_hi()];
+
         let xor_luts = [
-            &repeat_lut(self.lookup.bitxor_with_fwd_transf(), x_and_y_blocks_len)[..],
-            &repeat_luts_cycled(
-                &[self.lookup.fwd_lo(), self.lookup.fwd_hi()],
-                x_and_y_blocks_len,
-            )[..],
+            vec![&lut_bitxor_with_fwd_transf; x_and_y_blocks_len],
+            repeat_luts_cycled(&lut_fwd, x_and_y_blocks_len),
         ]
         .concat();
 
@@ -105,9 +105,10 @@ impl<'a> FheAesTowerField<'a> {
         ]
         .concat();
 
+        let (lut_gf2_mul, lut_gf2_mul_phi) = (self.lookup.gf2_mul(), self.lookup.gf2_mul_phi());
         let mul_luts = [
-            &repeat_lut(self.lookup.gf2_mul(), x0_xor_x1.len() + x0.len())[..],
-            &repeat_lut(self.lookup.gf2_mul_phi(), x1.len())[..],
+            vec![&lut_gf2_mul; x0_xor_x1.len() + x0.len()],
+            vec![&lut_gf2_mul_phi; x1.len()],
         ]
         .concat();
 
@@ -123,15 +124,15 @@ impl<'a> FheAesTowerField<'a> {
         let mut in_blocks = interleave_low_high(&lo2, &hi2);
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut in_blocks, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut in_blocks, &self.lookup.lut_bitxor());
 
         // Transform the results back into GF(2^4).
         let (lower, upper) = split_chunks_even_odd(&in_blocks, 1);
         let packed = self.fpga_key.pack_slices(&lower, &upper);
         let mut duplicated = repeat_each(&packed, 2);
 
-        let inv_luts =
-            repeat_luts_cycled(&[self.lookup.inv_lo(), self.lookup.inv_hi()], lower.len());
+        let lut_inv = [self.lookup.inv_lo(), self.lookup.inv_hi()];
+        let inv_luts = repeat_luts_cycled(&lut_inv, lower.len());
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut duplicated, &inv_luts);
@@ -178,13 +179,15 @@ impl<'a> FheAesTowerField<'a> {
         ]
         .concat();
 
+        let lut_bitxor_with_fwd_transf = self.lookup.bitxor_with_fwd_transf();
+        let fwd_lut = [self.lookup.fwd_lo(), self.lookup.fwd_hi()];
         let s_t_p_r_len = s_before_transf.len()
             + t_before_transf.len()
             + p_before_transf.len()
             + r_before_transf.len();
         let xor_luts = [
-            &repeat_lut(self.lookup.bitxor_with_fwd_transf(), s_t_p_r_len)[..],
-            &repeat_luts_cycled(&[self.lookup.fwd_lo(), self.lookup.fwd_hi()], s_t_p_r_len),
+            vec![&lut_bitxor_with_fwd_transf; s_t_p_r_len],
+            repeat_luts_cycled(&fwd_lut, s_t_p_r_len),
         ]
         .concat();
 
@@ -232,14 +235,12 @@ impl<'a> FheAesTowerField<'a> {
         .concat();
 
         // Duplicate LUT pack for both pairs.
-        let mul_luts = repeat_luts_cycled(
-            &[
-                &repeat_lut(self.lookup.gf2_mul(), s_xor_s1.len() + s0.len())[..],
-                &repeat_lut(self.lookup.gf2_mul_phi(), s1.len())[..],
-            ]
-            .concat(),
-            2,
-        );
+        let lut_gf2_mul = [
+            vec![self.lookup.gf2_mul(); s_xor_s1.len() + s0.len()],
+            vec![self.lookup.gf2_mul_phi(); s1.len()],
+        ]
+        .concat();
+        let mul_luts = repeat_luts_cycled(&lut_gf2_mul, 2);
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut mul_stage, &mul_luts);
@@ -276,7 +277,7 @@ impl<'a> FheAesTowerField<'a> {
 
         let mut combined = [&st_mul[..], &pr_mul[..]].concat();
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut combined, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut combined, &self.lookup.lut_bitxor());
 
         // Transform the results back into GF(2^4).
         let (st_blocks, pr_blocks) = combined.split_at(st_mul.len());
@@ -289,10 +290,8 @@ impl<'a> FheAesTowerField<'a> {
         ]
         .concat();
 
-        let inv_luts = repeat_luts_cycled(
-            &[self.lookup.inv_lo(), self.lookup.inv_hi()],
-            st_lower.len() + pr_lower.len(),
-        );
+        let inv_luts = [self.lookup.inv_lo(), self.lookup.inv_hi()];
+        let inv_luts = repeat_luts_cycled(&inv_luts, st_lower.len() + pr_lower.len());
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut inv_stage, &inv_luts);
@@ -344,14 +343,16 @@ impl<'a> FheAesTowerField<'a> {
         let mut cts_xor_and_lambda_sq =
             [&a0_and_a1_packed[..], &repeat_each(&a1_packed, 2)[..]].concat();
 
+        let lut_bitxor = self.lookup.lut_bitxor();
+        let lambda_sq_luts = [self.lookup.lambda_sq_lo2(), self.lookup.lambda_sq_hi2()];
+
         let luts_xor_and_lambda_sq = [
-            &repeat_lut(self.lookup.lut_bitxor(), a0_and_a1_packed.len())[..],
-            &repeat_luts_cycled(
-                &[self.lookup.lambda_sq_lo2(), self.lookup.lambda_sq_hi2()],
-                a1_packed.len(),
-            )[..],
+            &vec![&lut_bitxor; a0_and_a1_packed.len()],
+            &repeat_luts_cycled(&lambda_sq_luts, a1_packed.len())[..],
         ]
         .concat();
+
+        // let luts_xor_and_lambda_sq = luts_xor_and_lambda_sq.iter().collect::<Vec<_>>();
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut cts_xor_and_lambda_sq, &luts_xor_and_lambda_sq);
@@ -389,18 +390,15 @@ impl<'a> FheAesTowerField<'a> {
             .pack_slices(&a0_mul_a0xor_a1, lambda_sq_a1_in_blocks);
         self.fpga_key.apply_same_lookup_vector_packed_assign(
             &mut delta_in_blocks,
-            self.lookup.lut_bitxor(),
+            &self.lookup.lut_bitxor(),
         );
 
         let (delta_lo2, delta_hi2) = split_chunks_even_odd(&delta_in_blocks, 1);
         let delta_packed = self.fpga_key.pack_slices(&delta_lo2, &delta_hi2);
 
         let mut delta_inv_in_blocks: Vec<_> = repeat_each(&delta_packed, 2);
-
-        let luts_delta_inv = repeat_luts_cycled(
-            &[self.lookup.delta_inv_lo2(), self.lookup.delta_inv_hi2()],
-            delta_lo2.len(),
-        );
+        let lut_delta_inv = [self.lookup.delta_inv_lo2(), self.lookup.delta_inv_hi2()];
+        let luts_delta_inv = repeat_luts_cycled(&lut_delta_inv, delta_lo2.len());
 
         self.fpga_key
             .apply_lookup_vector_packed_assign(&mut delta_inv_in_blocks, &luts_delta_inv);

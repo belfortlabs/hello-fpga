@@ -29,9 +29,14 @@ impl FheAesEngine<'_> {
             .compute_substitute_in_tower_field(&temp_in_blocks);
 
         // Construct lookup table vector with the first byte being XORed with the round constant
+        let lut_inv_with_affine_and_xor_base = self.lookup.inv_with_affine_and_xor_base(y);
+        let lut_inv_with_affine_and_xor_base =
+            lut_inv_with_affine_and_xor_base.iter().collect::<Vec<_>>();
+        let lut_inv_with_affine_base = self.lookup.inv_with_affine_base();
+
         let key_schedule_core_luts = [
-            &self.lookup.inv_with_affine_and_xor_base(y)[..],
-            &repeat_luts_cycled(&self.lookup.inv_with_affine_base(), BYTES_IN_WORD - 1)[..],
+            lut_inv_with_affine_and_xor_base,
+            repeat_luts_cycled(&lut_inv_with_affine_base, BYTES_IN_WORD - 1),
         ]
         .concat();
 
@@ -44,7 +49,7 @@ impl FheAesEngine<'_> {
 
         self.fpga_key.apply_same_lookup_vector_packed_assign(
             &mut inv_in_tower_field,
-            self.lookup.lut_bitxor(),
+            &self.lookup.lut_bitxor(),
         );
 
         for byte_idx in 0..BYTES_IN_WORD {
@@ -80,7 +85,7 @@ impl FheAesEngine<'_> {
         let mut xor_input = self.fpga_key.pack_slices(&temp_in_blocks, &prev_in_blocks);
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_input, self.lookup.lut_bitxor());
+            .apply_same_lookup_vector_packed_assign(&mut xor_input, &self.lookup.lut_bitxor());
 
         let mut next_word = Vec::with_capacity(BYTES_IN_WORD);
         for byte_idx in 0..BYTES_IN_WORD {

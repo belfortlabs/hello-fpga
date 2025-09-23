@@ -45,7 +45,7 @@ impl FheAesEngine<'_> {
         let lut_bitxor = self.lookup.lut_bitxor();
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_inputs, lut_bitxor);
+            .apply_same_lookup_vector_packed_assign(&mut xor_inputs, &lut_bitxor);
 
         // Restructure the products into a 3D vector indexed by (row, col, constant index) where
         // - 0 -> 9
@@ -93,14 +93,14 @@ impl FheAesEngine<'_> {
         let mut xor_step1 = [packed_rows_0_1, packed_rows_2_3].concat();
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_step1, lut_bitxor);
+            .apply_same_lookup_vector_packed_assign(&mut xor_step1, &lut_bitxor);
 
         let (xor_step1_left, xor_step1_right) = xor_step1.split_at(64);
 
         let mut xor_step2 = self.fpga_key.pack_slices(xor_step1_left, xor_step1_right);
 
         self.fpga_key
-            .apply_same_lookup_vector_packed_assign(&mut xor_step2, lut_bitxor);
+            .apply_same_lookup_vector_packed_assign(&mut xor_step2, &lut_bitxor);
 
         state.state_from_column_major_in_blocks_assign(&xor_step2);
     }

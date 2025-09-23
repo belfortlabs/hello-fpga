@@ -66,7 +66,7 @@ impl FheAesEngine<'_> {
             ) -> Vec<[FheAesByte; AES_BLOCK_SIZE]>
             + 'static,
     {
-        let fpga_indexes = self.fpga_key.fpga_utils.fpga_indexes.clone();
+        let fpga_indexes = self.fpga_key.utils.fpga_indexes.clone();
         #[cfg(feature = "emulate_fpga")]
         let fpga_indexes: Vec<usize> =
             crate::core_crypto::fpga::BelfortFpgaUtils::get_fpga_indices_from_env();
@@ -81,7 +81,7 @@ impl FheAesEngine<'_> {
                 let mut thread_key = self.fpga_key.clone();
 
                 thread::spawn(move || {
-                    thread_key.fpga_utils.fpga_indexes = vec![i];
+                    thread_key.utils.fpga_indexes = vec![i];
 
                     while let Ok(p) = rx.recv() {
                         let result_vec =
@@ -110,7 +110,7 @@ impl FheAesEngine<'_> {
             ) -> Vec<[FheAesByte; AES_BLOCK_SIZE]>
             + 'static,
     {
-        let num_fpgas = self.fpga_key.fpga_utils.fpga_indexes.len();
+        let num_fpgas = self.fpga_key.utils.fpga_indexes.len();
         #[cfg(feature = "emulate_fpga")]
         let num_fpgas =
             crate::core_crypto::fpga::BelfortFpgaUtils::get_fpga_indices_from_env().len();
