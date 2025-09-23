@@ -21,9 +21,9 @@
 * SOFTWARE.
 */
 
-#[cfg(feature = "fpga")]
-use tfhe::core_crypto::fpga::keyswitch_bootstrap::KeyswitchBootstrapPacked;
 use tfhe::core_crypto::fpga::lookup_vector::LookupVector;
+#[cfg(feature = "fpga")]
+use tfhe::core_crypto::fpga::programmable_bootstrap::ProgrammableBootstrapPacked;
 use tfhe::shortint::prelude::*;
 
 use crate::data;
@@ -215,9 +215,9 @@ impl App {
         let lut_eq_vec = vec![lut_eq; enc_struct.db_size];
         let lut_min_vec = vec![lut_min; enc_struct.db_size];
 
-        let lut_1eq_fpga = LookupVector::new(&lut_1eq_vec_def);
-        let lut_eq_fpga = LookupVector::new(&lut_eq_vec_def);
-        let lut_min_fpga = LookupVector::new(&lut_min_vec_def);
+        let lut_1eq_fpga = LookupVector::new(lut_1eq_vec_def);
+        let lut_eq_fpga = LookupVector::new(lut_eq_vec_def);
+        let lut_min_fpga = LookupVector::new(lut_min_vec_def);
 
         let lut_1eq_vec_fpga = vec![lut_1eq_fpga; enc_struct.db_size];
         let lut_eq_vec_fpga = vec![lut_eq_fpga; enc_struct.db_size];
@@ -331,7 +331,7 @@ impl App {
             .generate_lookup_table_from_vector(&lut_min_vec_def);
         let lut_min_vec = vec![lut_min; enc_struct.db_size];
 
-        let fpga_lut_single = LookupVector::new(&lut_min_vec_def);
+        let fpga_lut_single = LookupVector::new(lut_min_vec_def);
         let lut_min_vec_fpga = vec![fpga_lut_single; enc_struct.db_size];
 
         enc_struct.max_factor = max_factor;
@@ -369,11 +369,11 @@ impl App {
 
                 if fpga_enable {
                     eq1_lut = eq1.clone();
+                    let _luts = enc_struct.lut_1eq_vec_fpga.iter().collect::<Vec<_>>();
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
+                        .programmable_bootstrap_packed(&mut eq1_lut, &_luts);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -405,11 +405,11 @@ impl App {
 
                 if fpga_enable {
                     eq2_lut = eq2.clone();
+                    let _luts = enc_struct.lut_eq_vec_fpga.iter().collect::<Vec<_>>();
                     #[cfg(feature = "fpga")]
-                    enc_struct.fpga_key.apply_lookup_vector_packed_assign(
-                        &mut eq2_lut,
-                        &enc_struct.lut_eq_vec_fpga,
-                    );
+                    enc_struct
+                        .fpga_key
+                        .apply_lookup_vector_packed_assign(&mut eq2_lut, &_luts);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -443,11 +443,11 @@ impl App {
 
                 if fpga_enable {
                     ct_res = key.clone();
+                    let _luts = enc_struct.lut_min_vec_fpga.iter().collect::<Vec<_>>();
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                        .programmable_bootstrap_packed(&mut ct_res, &_luts);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -516,11 +516,11 @@ impl App {
                 let mut ct_res: Vec<Ciphertext>;
                 if fpga_enable {
                     ct_res = key.clone();
+                    let _luts = enc_struct.lut_min_vec_fpga.iter().collect::<Vec<_>>();
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                        .programmable_bootstrap_packed(&mut ct_res, &_luts);
                 } else {
                     ct_res = apply_lookup_table_packed(
                         &enc_struct.sks,
