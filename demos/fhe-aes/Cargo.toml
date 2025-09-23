@@ -1,0 +1,31 @@
+[package]
+name = "fhe-aes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tfhe = { workspace = true }
+rand = { workspace = true }
+crossterm = { workspace = true }
+
+aes = "0.8.4"
+bit-vec = "0.8"
+clap = "4.5.23"
+dashmap = "6.1.0"
+log = "0.4.22"
+env_logger = "0.11.6"
+hex = "0.4.3"
+rand_chacha = "0.3.1"
+itertools = "0.11.0"
+proc-macro2 = "=1.0.97"
+chrono = "0.4"
+terminal-spinners = "0.3.2"
+
+[features]
+fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
+
+[[bin]]
+name = "demo"
+path = "src/main.rs"
+required-features = ["fpga"]

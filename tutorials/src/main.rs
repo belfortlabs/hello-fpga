@@ -1,5 +1,7 @@
 use rand::Rng;
 use std::time::Instant;
+// Enable FPGA: Import the BelfortServerKey
+#[cfg(feature = "fpga")]
 use tfhe::integer::fpga::BelfortServerKey;
 use tfhe::prelude::*;
 use tfhe::set_server_key;
@@ -10,10 +12,9 @@ fn main() {
     env_logger::init();
 
     // Test data
+    let mut rng = rand::rng();
 
-    let mut rng = rand::thread_rng();
-
-    let generate_value_weight = (rng.gen_range(1..=10), rng.gen_range(1..=10));
+    let generate_value_weight = (rng.random_range(1..=10), rng.random_range(1..=10));
 
     let (value1, weight1) = generate_value_weight;
     let (value2, weight2) = generate_value_weight;
@@ -22,17 +23,22 @@ fn main() {
     let weighted_sum = value1 * weight1 + value2 * weight2 + value3 * weight3;
 
     // Create Keys
-
     let config = ConfigBuilder::default().build();
     let client_key = ClientKey::generate(config);
     let server_key = client_key.generate_server_key();
 
-    let mut fpga_key = BelfortServerKey::from(&server_key);
-    fpga_key.connect();
-    set_server_key(fpga_key.clone());
+    // Enable FPGA: Create FPGA key from your server and connect to it
+    #[cfg(feature = "fpga")]
+    let mut fpga_key = {
+        let mut fpga_key = BelfortServerKey::from(&server_key);
+        fpga_key.connect();
+        set_server_key(fpga_key.clone());
+        fpga_key
+    };
+    #[cfg(not(feature = "fpga"))]
+    set_server_key(server_key);
 
     // Encrypt Values
-
     let encrypt_value_weight = |v, w| {
         (
             FheUint64::encrypt(v, &client_key),
@@ -52,10 +58,15 @@ fn main() {
         + encrypted_value2 * encrypted_weight2
         + encrypted_value3 * encrypted_weight3;
 
-    println!("Execution time {:?}", time_start.elapsed());
+    #[cfg(feature = "fpga")]
+    println!("Execution time on FPGA: {:?}", time_start.elapsed());
+    #[cfg(not(feature = "fpga"))]
+    println!("Execution time on CPU: {:?}", time_start.elapsed());
 
     let decrypted_weighted_sum: u64 = encypted_weighted_sum.decrypt(&client_key);
     assert_eq!(decrypted_weighted_sum, weighted_sum);
 
+    // Enable FPGA: Disconnect the BelfortServerKey
+    #[cfg(feature = "fpga")]
     fpga_key.disconnect();
 }

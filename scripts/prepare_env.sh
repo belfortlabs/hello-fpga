@@ -6,22 +6,45 @@ export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
 # Clone TFHE-rs and patch it with Belfort FPGA integration
 
 export TFHERS_DIR="$HOME/tfhe-rs"
-
-export TFHERS_URL=https://github.com/zama-ai/tfhe-rs.git
 export TFHERS_TAG=tfhe-rs-0.11.3
-git clone --no-checkout $TFHERS_URL $TFHERS_DIR
+export TFHERS_URL=https://github.com/zama-ai/tfhe-rs.git
+export PATCH_COMMIT_MSG="Belfort Patch Applied"
 
-pushd $TFHERS_DIR
-git checkout tags/$TFHERS_TAG -b $TFHERS_TAG
-git apply $REPO_DIR/belfort.patch
+separator() {
+    printf "\n=========================================================\n\n"
+}
 
-# Cleanup git history
-# git add .
-# git commit -m "Belfort Release"
-popd
+if [ -d "$TFHERS_DIR" ]; then
+    echo "Stash changes and set ZAMA GitHub as the origin"
+    pushd $TFHERS_DIR
+    git stash -m "Stashed changes"
+    git remote set-url origin $TFHERS_URL
+else
+    echo "Fresh Clone of TFHE-rs"
+    git clone --no-checkout $TFHERS_URL $TFHERS_DIR
+    pushd $TFHERS_DIR
+fi
 
-################################################################################
-# Install Rust
+separator
+echo "Checkout TFHE-rs for Belfort FPGA acceleration"
+PATCH_COMMIT=$(git log --grep="$PATCH_COMMIT_MSG" --format="%H" | head -n 1)
+
+if [ -n "$PATCH_COMMIT" ]; then
+    git checkout $PATCH_COMMIT
+else
+    git checkout tags/$TFHERS_TAG -B $TFHERS_TAG
+
+    echo "Applying Belfort patch..."
+    git apply $REPO_DIR/belfort.patch
+
+    separator
+    git add .
+    echo "Group all changes into one commit"
+    git commit -m "$PATCH_COMMIT_MSG"
+fi
+
+separator
+echo "Update rust if needed"
 
 export ENV_DIR="$REPO_DIR/.env"
 export RUSTUP_HOME=$ENV_DIR/rust/rustup
@@ -44,18 +67,3 @@ pushd $TFHERS_DIR
 make install_rs_check_toolchain
 make install_rs_build_toolchain
 popd
-
-################################################################################
-# Create setup file
-
-export ENV_SETUP_SH="$REPO_DIR/scripts/source_env.sh"
-
-echo ""
-echo "export RUSTUP_HOME=$RUSTUP_HOME" >> $ENV_SETUP_SH
-echo "export CARGO_HOME=$CARGO_HOME" >> $ENV_SETUP_SH
-echo "export RUST_LOG=warn" >> $ENV_SETUP_SH
-echo ""
-echo "source $CARGO_HOME/env" >> $ENV_SETUP_SH
-echo ""
-
-chmod +x $ENV_SETUP_SH
