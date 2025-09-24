@@ -1,4 +1,15 @@
-# BELFORT FHE Accelerator
+<p align="center">
+<!-- product name logo -->
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/a81f0598-59b1-4160-95d3-661cab99f6a8">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/a6abe4d5-e849-435c-8319-70029f08d201">
+  <img width=600 alt="Belfort FHE Accelerator">
+</picture>
+</p>
+
+---
+
+# Belfort FHE Accelerator
 
 This repo provides demo applications implemented on TFHE-rs, and enables FPGA acceleration on it.
 
