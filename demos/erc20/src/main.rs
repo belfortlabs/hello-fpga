@@ -24,8 +24,16 @@ const NAMES: &[&str] = &[
     "Victor", "Wendy", "Xavier", "Yvonne", "Zara",
 ];
 
+#[cfg(not(feature = "emulate_fpga"))]
 const INSTRUCTIONS: &[&str] = &[
     "Press 'f' to switch to FPGA execution",
+    "Press 'c' to switch to CPU execution",
+    "Press 'q' to quit",
+];
+
+#[cfg(feature = "emulate_fpga")]
+const INSTRUCTIONS: &[&str] = &[
+    "Press 'f' to switch to FPGA emulation",
     "Press 'c' to switch to CPU execution",
     "Press 'q' to quit",
 ];

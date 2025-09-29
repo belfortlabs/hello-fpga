@@ -51,6 +51,12 @@ fn main() {
         use tfhe::integer::ServerKey as IntegerServerKey;
         use tfhe_trivium::TriviumStreamFPGAShortint;
 
+        #[cfg(not(feature = "emulate_fpga"))]
+        println!("\r      Running on FPGA.         ");
+
+        #[cfg(feature = "emulate_fpga")]
+        println!("\r      Running on FPGA emulation.         ");
+
         let integer_server_key =
             IntegerServerKey::new_radix_server_key_from_shortint(server_key.clone());
         let fpga_key = BelfortServerKey::from(&integer_server_key);
@@ -61,6 +67,8 @@ fn main() {
     #[cfg(not(feature = "fpga"))]
     let mut trivium = {
         use tfhe::{generate_keys, ConfigBuilder};
+
+        println!("\r      Running on CPU.         ");
 
         let ksk = KeySwitchingKey::new(
             (&client_key, Some(&server_key)),
