@@ -15,6 +15,7 @@ color-eyre = "0.6.3"
 
 [features]
 fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
 
 [[bin]]
 name = "demo"

@@ -10,6 +10,7 @@ rayon = { workspace = true }
 
 [features]
 fpga = ["tfhe/fpga"]
+emulate_fpga = ["tfhe/emulate_fpga"]
 
 [[bin]]
 name = "demo-byte"

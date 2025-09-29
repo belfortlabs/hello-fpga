@@ -372,8 +372,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
+                        .apply_lookup_vector_packed_assign(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -446,8 +445,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                        .apply_lookup_vector_packed_assign(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -519,8 +517,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                        .apply_lookup_vector_packed_assign(&mut ct_res, &enc_struct.lut_min_vec_fpga);
                 } else {
                     ct_res = apply_lookup_table_packed(
                         &enc_struct.sks,
