@@ -384,6 +384,7 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
             Style::default().add_modifier(Modifier::SLOW_BLINK),
         ),
         InputMode::FEditing => (
+            #[cfg(not(feature = "emulate_fpga"))]
             vec![
                 "Press ".into(),
                 "Esc".bold(),
@@ -391,10 +392,24 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                 "Enter".bold(),
                 " to process the message with FPGA".into(),
             ],
+            
+            #[cfg(feature = "emulate_fpga")]
+            vec![
+                "Press ".into(),
+                "Esc".bold(),
+                " to stop entering, ".into(),
+                "Enter".bold(),
+                " to process the message with FPGA emulation".into(),
+            ],
+
             Style::default(),
         ),
         InputMode::FProcess => (
+            #[cfg(not(feature = "emulate_fpga"))]
             vec!["Processing with FPGA...".into()],
+            
+            #[cfg(feature = "emulate_fpga")]
+            vec!["Processing with FPGA emulation...".into()],
             Style::default().add_modifier(Modifier::SLOW_BLINK),
         ),
     };
