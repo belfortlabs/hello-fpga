@@ -9,6 +9,7 @@ use std::{
 use tfhe::BelfortServerKey;
 
 use crate::algorithm::constants::{AES_BLOCK_SIZE, EXPANDED_KEY_SIZE};
+use tfhe::core_crypto::fpga::BelfortFpgaUtils;
 
 use super::{FheAesEngine, state::FheAesByte};
 
@@ -66,10 +67,10 @@ impl FheAesEngine<'_> {
             ) -> Vec<[FheAesByte; AES_BLOCK_SIZE]>
             + 'static,
     {
-        let fpga_indexes = self.fpga_key.utils.fpga_indexes.clone();
+        let fpga_indexes = self.fpga_key.fpga_utils.fpga_indexes.clone();
+
         #[cfg(feature = "emulate_fpga")]
-        let fpga_indexes: Vec<usize> =
-            crate::core_crypto::fpga::BelfortFpgaUtils::get_fpga_indices_from_env();
+        let fpga_indexes: Vec<usize> = BelfortFpgaUtils::get_fpga_indices_from_env();
 
         fpga_indexes
             .into_iter()
@@ -112,8 +113,7 @@ impl FheAesEngine<'_> {
     {
         let num_fpgas = self.fpga_key.utils.fpga_indexes.len();
         #[cfg(feature = "emulate_fpga")]
-        let num_fpgas =
-            crate::core_crypto::fpga::BelfortFpgaUtils::get_fpga_indices_from_env().len();
+        let num_fpgas = BelfortFpgaUtils::get_fpga_indices_from_env().len();
 
         let (tx_res, rx_res) = channel::<(usize, Vec<[FheAesByte; AES_BLOCK_SIZE]>)>();
         let op = Arc::new(op);

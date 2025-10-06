@@ -373,7 +373,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .programmable_bootstrap_packed(&mut eq1_lut, &_luts);
+                        .apply_lookup_vector_packed_assign(&mut eq1_lut, &_luts);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -447,7 +447,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .programmable_bootstrap_packed(&mut ct_res, &_luts);
+                        .apply_lookup_vector_packed_assign(&mut ct_res, &_luts);
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -520,7 +520,7 @@ impl App {
                     #[cfg(feature = "fpga")]
                     enc_struct
                         .fpga_key
-                        .programmable_bootstrap_packed(&mut ct_res, &_luts);
+                        .apply_lookup_vector_packed_assign(&mut ct_res, &_luts);
                 } else {
                     ct_res = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -612,9 +612,17 @@ impl App {
         let time_string = format!("{:.5}", sec);
 
         let comment = if fpga_enable & enc_struct.input.starts_with("p:") {
-            "plaintext query and FPGA Acceleration".to_owned()
+            if cfg!(feature = "emulate_fpga") {
+                "plaintext query and FPGA Emulation".to_owned()
+            } else {
+                "plaintext query and FPGA Acceleration".to_owned()
+            }
         } else if fpga_enable {
-            "FPGA Acceleration".to_owned()
+            if cfg!(feature = "emulate_fpga") {
+                "FPGA Emulation".to_owned()
+            } else {
+                "FPGA Acceleration".to_owned()
+            }
         } else if enc_struct.input.starts_with("p:") {
             "plaintext query".to_owned()
         } else {
@@ -686,7 +694,7 @@ impl App {
         let text = Text::from(vec![
             Line::from("Created by Wouter Legiest, COSIC - KU Leuven"),
             Line::from(""),
-            Line::from("Accelerated on FPGA by Belfort"),
+            Line::from("Accelerated/Emulated on FPGA by Belfort"),
             Line::from(""),
             Line::from(Span::styled(
                 "Leuvenshtein Database Demo",

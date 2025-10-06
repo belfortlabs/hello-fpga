@@ -160,6 +160,15 @@ set_server_key(fpga_key);
 - Enabling the logger ([as in env_logger::init(); in the tutorial](./tutorials/src/main.rs#L12)) gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
+- The FPGAs can also be emulated while running the demos (useful when hardware access is unavailable) by replacing:
+    ```bash
+    --features fpga
+    ```
+    with:
+    ```bash
+    --features "fpga,emulate_fpga"
+    ```
+
 
 ### Contributors
 

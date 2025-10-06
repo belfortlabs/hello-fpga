@@ -44,7 +44,12 @@ pub(crate) fn homomorphic_addition(
     let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, 4);
     let mut fpga_key = BelfortServerKey::from(&server_key);
 
+    #[cfg(not(feature = "emulate_fpga"))]
     let step_id = start_step(LogKind::Client, "Connecting to the FPGA(s)", STEPS_COLOR);
+
+    #[cfg(feature = "emulate_fpga")]
+    let step_id = start_step(LogKind::Client, "Emulating FPGA", STEPS_COLOR);
+
     fpga_key.connect();
     set_server_key(fpga_key.clone());
     end_step(step_id, true);

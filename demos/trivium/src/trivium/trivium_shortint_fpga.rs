@@ -130,7 +130,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         // Pack 1
 
         let mut pack1: Vec<Ciphertext> = Vec::with_capacity(n * 3 * 2);
-        let mut pack1_g: Vec<LookupVector> = Vec::with_capacity(n * 3 * 2);
+        let mut pack1_g: Vec<&LookupVector> = Vec::with_capacity(n * 3 * 2);
 
         for i in 0..n {
             pack1.push(self.pack_block_assign(&self.a[91 - i], &self.a[90 - i]));
@@ -139,7 +139,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         }
 
         for _ in 0..(n * 3) {
-            pack1_g.push(lut_and);
+            pack1_g.push(&lut_and);
         }
 
         for i in 0..n {
@@ -149,7 +149,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         }
 
         for _ in 0..(n * 3) {
-            pack1_g.push(lut_xor);
+            pack1_g.push(&lut_xor);
         }
 
         self.fk
@@ -159,7 +159,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         // Pack 2
 
         let mut pack2: Vec<Ciphertext> = Vec::with_capacity(n * 3 + n);
-        let mut pack2_g: Vec<LookupVector> = Vec::with_capacity(n * 3 + n);
+        let mut pack2_g: Vec<&LookupVector> = Vec::with_capacity(n * 3 + n);
 
         for i in 0..n {
             pack2.push(self.pack_block_assign(&pack1[i * 3 + 2], &self.a[68 - i]));
@@ -172,7 +172,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         }
 
         for _ in 0..(n * 3 + n) {
-            pack2_g.push(lut_xor);
+            pack2_g.push(&lut_xor);
         }
 
         self.fk
@@ -182,7 +182,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         // Pack 3
 
         let mut pack3: Vec<Ciphertext> = Vec::with_capacity(n * 3 + n);
-        let mut pack3_g: Vec<LookupVector> = Vec::with_capacity(n * 3 + n);
+        let mut pack3_g: Vec<&LookupVector> = Vec::with_capacity(n * 3 + n);
 
         for i in 0..n {
             pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3 + 2], &pack2[i * 3 + 0]));
@@ -195,7 +195,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         }
 
         for _ in 0..(n * 3 + n) {
-            pack3_g.push(lut_xor);
+            pack3_g.push(&lut_xor);
         }
 
         self.fk
