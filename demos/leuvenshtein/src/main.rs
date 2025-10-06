@@ -341,6 +341,7 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
 
     let (msg, style) = match app.input_mode {
         InputMode::Normal => (
+            #[cfg(not(feature = "emulate_fpga"))]
             vec![
                 "Press ".into(),
                 "q".bold(),
@@ -352,6 +353,20 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                 "FPGA-accelerated".bold().italic().yellow(),
                 " query.".into(),
             ],
+
+            #[cfg(feature = "emulate_fpga")]
+            vec![
+                "Press ".into(),
+                "q".bold(),
+                " to exit; ".into(),
+                "e".bold(),
+                " to start CPU-based query; ".into(),
+                "f".bold(),
+                " to start ".into(),
+                "FPGA-emulated".bold().italic().yellow(),
+                " query.".into(),
+            ],
+
             Style::default().add_modifier(Modifier::RAPID_BLINK),
         ),
         InputMode::Editing => (
@@ -369,6 +384,7 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
             Style::default().add_modifier(Modifier::SLOW_BLINK),
         ),
         InputMode::FEditing => (
+            #[cfg(not(feature = "emulate_fpga"))]
             vec![
                 "Press ".into(),
                 "Esc".bold(),
@@ -376,10 +392,24 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                 "Enter".bold(),
                 " to process the message with FPGA".into(),
             ],
+            
+            #[cfg(feature = "emulate_fpga")]
+            vec![
+                "Press ".into(),
+                "Esc".bold(),
+                " to stop entering, ".into(),
+                "Enter".bold(),
+                " to process the message with FPGA emulation".into(),
+            ],
+
             Style::default(),
         ),
         InputMode::FProcess => (
+            #[cfg(not(feature = "emulate_fpga"))]
             vec!["Processing with FPGA...".into()],
+            
+            #[cfg(feature = "emulate_fpga")]
+            vec!["Processing with FPGA emulation...".into()],
             Style::default().add_modifier(Modifier::SLOW_BLINK),
         ),
     };
@@ -471,7 +501,7 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                 span3 = vec![<String as Clone>::clone(&m.3).blue().bold()];
             } else if &m.3 == "plaintext query" {
                 span3 = vec![<String as Clone>::clone(&m.3).magenta().bold()];
-            } else if &m.3 == "FPGA Acceleration" {
+            } else if &m.3 == "FPGA Acceleration" || &m.3 == "FPGA Emulation"{
                 span3 = vec![<String as Clone>::clone(&m.3).yellow().bold()];
             } else {
                 span3 = vec![
@@ -482,8 +512,18 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::from(" and "),
+
+                    #[cfg(not(feature = "emulate_fpga"))]
                     Span::styled(
                         "FPGA Acceleration",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+
+                    #[cfg(feature = "emulate_fpga")]
+                    Span::styled(
+                        "FPGA Emulation",
                         Style::default()
                             .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD),

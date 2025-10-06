@@ -4320,7 +4320,7 @@ new file mode 100644
 index 000000000..16ea5793b
 --- /dev/null
 +++ b/tfhe/src/core_crypto/fpga/utils.rs
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,185 @@
 +use super::InterfaceStatusT;
 +use crate::boolean::server_key::ServerKey as BooleanServerKey;
 +use crate::core_crypto::fpga::{Accelerators, BelfortFpgaUtils};
@@ -4478,6 +4478,19 @@ index 000000000..16ea5793b
 +
 +        self.fpga_indexes = fpga_indexes;
 +        self.is_connected = true;
++    }
++
++    pub fn get_fpga_indices_from_env() -> Vec<usize> {
++        let fpga_count_string = match std::env::var("BELFORT_FPGA_IDX") {
++            Ok(val) => val,
++            Err(err) => {
++                panic!("Cannot read BELFORT_FPGA_IDX variable: {err}")
++            }
++        };
++        let fpga_indices = fpga_count_string
++            .split(':')
++            .map(|x| str::parse::<usize>(x).unwrap());
++        fpga_indices.collect()
 +    }
 +
 +    pub fn disconnect(&mut self) {

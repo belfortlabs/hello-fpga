@@ -340,8 +340,8 @@ pub fn process_enc_query_enc_db(
                 let mut eq1_lut = Vec::new();
 
                 eq1_lut = eq1.clone();
-                fpga.fpga_utils
-                    .keyswitch_bootstrap_packed(&mut eq1_lut, &lut_1eq_vec_fpga);
+
+                fpga.apply_same_lookup_vector_packed_assign(&mut eq1_lut, &lut_1eq_vec_fpga);
 
                 let eq1_ref: Vec<&Ciphertext> = eq1_lut.iter().collect(); // ?
 
@@ -360,8 +360,9 @@ pub fn process_enc_query_enc_db(
                 let mut eq2_lut = Vec::new();
 
                 eq2_lut = eq2.clone();
-                fpga.fpga_utils
-                    .keyswitch_bootstrap_packed(&mut eq2_lut, &lut_eq_vec_fpga);
+
+                fpga.apply_same_lookup_vector_packed_assign(&mut eq2_lut, &lut_eq_vec_fpga);
+
 
                 let vin = extract_number_elements(&v_matrices, i, j - 1);
                 let hin = extract_number_elements(&h_matrices, i - 1, j);
@@ -378,8 +379,8 @@ pub fn process_enc_query_enc_db(
                 let mut ct_res = Vec::new();
 
                 ct_res = key.clone();
-                fpga.fpga_utils
-                    .keyswitch_bootstrap_packed(&mut ct_res, &lut_min_vec_fpga);
+
+                fpga.apply_same_lookup_vector_packed_assign(&mut ct_res, &lut_min_vec_fpga);
 
                 sks.unchecked_scalar_add_packed_assign(&mut ct_res, 16);
 
