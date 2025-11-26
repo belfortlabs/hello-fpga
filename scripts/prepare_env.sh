@@ -1,12 +1,12 @@
 #!/bin/bash
-
+set -e
 export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
 
 ################################################################################
 # Clone TFHE-rs and patch it with Belfort FPGA integration
 
 export TFHERS_DIR="$(realpath "$REPO_DIR/../tfhe-rs")"
-export TFHERS_TAG=tfhe-rs-0.11.3
+export TFHERS_TAG=tfhe-rs-1.4.2
 export TFHERS_URL=https://github.com/zama-ai/tfhe-rs.git
 export PATCH_COMMIT_MSG="Belfort Patch Applied"
 
