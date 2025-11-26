@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+
 export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
 
 ################################################################################
@@ -40,7 +41,7 @@ else
     separator
     git add .
     echo "Group all changes into one commit"
-    git commit -m "$PATCH_COMMIT_MSG"
+    git -c user.name="Hello FPGA" -c user.email="hello-fpga@belfortlabs.com" commit -m "$PATCH_COMMIT_MSG"
 fi
 
 separator
