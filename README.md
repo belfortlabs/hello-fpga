@@ -20,49 +20,35 @@ set_server_key(fpga_key.clone());
 // The rest of your code stays unchanged
 ```
 
-:warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on AWS.
+:warning: This is the early access version of the Belfort FHE Accelerator.
 
 ## How to run a demo?
 
-### Setup your AWS Account
-
-AWS accounts do not have access to F2 instances by default. You need to file [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 24 vCPU cores**, as `f2.6xlarge` requires 24 vCPUs. The quota increase may take up to a few days to process.
-
-In your communication to AWS, please pay attention that the F2 access permissions are tied to a region. **The FPGA image is available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**.
-
-### Launch an F2 instance
-
-Open the [Amazon EC2 Console](https://console.aws.amazon.com/ec2/) and launch an AWS EC2 F2 instance based on Belfort public AMI (Amazon Machine Image).
-
-Upon need a guide for AWS console, check this [tutorial](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/tutorial-launch-a-test-ec2-instance.html#tut2-task-4-launch-test-instance).
-
-AMI: [Belfort FPGA Acceleration AMI](https://aws.amazon.com/marketplace/pp/prodview-imfiyzy7svjgu) on the AWS Marketplace.
-  - This AMI by Belfort is ready-to-use.
-  - It's free of charge, though using AWS EC2 comes with its own fees.
-
-Instance types: pick one below depending on the FPGA acceleration you demand
-  - `f2.6xlarge` for 1 FPGA (requires access to 24 vCPUs)
-  - `f2.12xlarge` for 2 FPGAs (requires access to 48 vCPUs)
-  - `f2.48xlarge` for 8 FPGAs (requires access to 192 vCPUs)
-
 ### Prepare execution environment
 
-1. SSH into Belfort development server `flipflop` by hopping over ESAT gateway `ssh.esat.kuleuven.be`
+1. SSH into the `bologna` Belfort development server
 
 ```bash
-ssh -J <username>@ssh.esat.kuleuven.be <username>@flipflop.esat.kuleuven.be
+ssh -i <ssh_key> <username>@bologna.belfortlabs.cloud
 ```
 
-2. Clone this repo into your AWS instance
+2. Clone this repo into your home directory
 
 ```bash
 git clone https://github.com/belfortlabs/hello-fpga.git
 ```
 
-3. Clone the Belfort TFHE-rs fork
+3. Run the setup script
 
 ```bash
-git clone https://github.com/belfortlabs/tfhe-rs.git
+cd hello-fpga && ./scripts/prepare_env.sh
+```
+
+4. Set the environment variables
+
+```bash
+source ~/hello-fpga/.env/rust/cargo/env
+source /opt/belfort/source_tools
 ```
 
 ### Run the weighted-sum tutorial
@@ -168,12 +154,6 @@ set_server_key(fpga_key);
 
 ### Caveats
 
-- Additional commands are available to interact with the FPGA's:
-  - `fpga-program`: programs the fpga's with the Belfort FPGA image released on AWS.
-                    This command is only required if the FPGA's were reset.
-  - `fpga-reset`:   Resets the fpga images. This is useful if you kill your app with `Ctrl+C` while it interacts with the FPGAs,
-                    and the FPGAs are in a bad state.
-- **In case you run your programs without the fpga's programmed, you will get segmentation faults.**
 - Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
 - Enabling the logger ([as in env_logger::init(); in the tutorial](./tutorials/src/main.rs#L12)) gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
