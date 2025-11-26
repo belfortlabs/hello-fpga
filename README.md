@@ -47,9 +47,11 @@ cd hello-fpga && ./scripts/prepare_env.sh
 4. Set the environment variables
 
 ```bash
-source ~/hello-fpga/.env/rust/cargo/env
+source ~/.cargo/cargo/env
 source /opt/belfort/source_tools
 ```
+
+Note: add the above lines to your `.bashrc` file to automatically source the environment variables when you log in.
 
 ### Run the weighted-sum tutorial
 

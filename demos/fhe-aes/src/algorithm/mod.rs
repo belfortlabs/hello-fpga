@@ -29,7 +29,9 @@ pub struct FheAes<'a> {
 
 impl<'a> FheAes<'a> {
     pub fn new(fpga_key: &'a BelfortServerKey) -> Self {
-        let trivial_zero_ct = fpga_key.key.key.create_trivial_zero_radix(BLOCKS_PER_BYTE);
+        let trivial_zero_ct = fpga_key
+            .pbs_key()
+            .create_trivial_zero_radix(BLOCKS_PER_BYTE);
 
         let aes_engine = FheAesEngine::new(fpga_key);
 

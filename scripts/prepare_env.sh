@@ -47,9 +47,9 @@ fi
 separator
 echo "Update rust if needed"
 
-export ENV_DIR="$REPO_DIR/.env"
-export RUSTUP_HOME=$ENV_DIR/rust/rustup
-export CARGO_HOME=$ENV_DIR/rust/cargo
+export ENV_DIR="$HOME/.cargo"
+export RUSTUP_HOME=$ENV_DIR/rustup
+export CARGO_HOME=$ENV_DIR/cargo
 
 export RUST_SETUP_SH="$REPO_DIR/scripts/rust_setup.sh"
 

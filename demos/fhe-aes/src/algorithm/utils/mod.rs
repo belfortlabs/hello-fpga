@@ -30,7 +30,7 @@ impl<'a> FheAesCiphertextUtils for BelfortServerKey {
     /// # Returns
     /// - Packed "Ciphertext" block ct_low + (ct_high << 2).
     fn pack_radix4(&self, ct_low: &Ciphertext, ct_high: &Ciphertext) -> Ciphertext {
-        let shortint_key = &self.key.key.key;
+        let shortint_key = &self.pbs_key().key;
 
         let mut ct_low_mut = ct_low.clone();
 

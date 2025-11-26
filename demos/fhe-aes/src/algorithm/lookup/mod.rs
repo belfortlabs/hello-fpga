@@ -38,7 +38,7 @@ impl<'a> FheAesLookup<'a> {
     }
 
     pub fn lut_bitxor(&self) -> LookupVector {
-        let shortint_key = &self.fpga_key.key.key.key;
+        let shortint_key = &self.fpga_key.pbs_key().key;
         let func = |x, y| x ^ y;
         shortint_key.generate_lookup_vector_bivariate(&func)
     }
