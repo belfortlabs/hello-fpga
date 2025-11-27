@@ -79,14 +79,6 @@ This repository also contains more comprehensive demo applications. Below you ca
 cargo run --release --package fhe-aes --bin demo --features fpga
 ```
 
-#### Leuvenshtein
-
-[Leuvenshtein demo](/demos/leuvenshtein/README.md) implements the fuzzy matching algorithm to compare two strings while allowing a limited amount of mistakes. You can run the interactive demo with:
-
-```bash
-cargo run --release --package leuvenshtein --bin demo --features fpga
-```
-
 #### Other Demos:
 
 - [ERC20 demo](/demos/erc20/README.md) is a terminal-based Rust demo that visualizes encrypted ERC20-like token transactions.
@@ -172,9 +164,7 @@ set_server_key(fpga_key);
 
 ### Contributors
 
-- [Wouter Legiest](https://github.com/woutlegiest), developer of the Leuvenshtein demo
 - [Beren Aydoğan](https://github.com/berenaydogan), developer of the AES demo
-
 
 ### License
 
