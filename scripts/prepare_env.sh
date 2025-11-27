@@ -61,9 +61,6 @@ rm -f $RUST_SETUP_SH
 
 source "$CARGO_HOME/env"
 
-rustup toolchain install nightly-x86_64-unknown-linux-gnu
-rustup default nightly
-
 pushd $TFHERS_DIR
 make install_rs_check_toolchain
 make install_rs_build_toolchain
