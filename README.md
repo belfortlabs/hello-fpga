@@ -1,4 +1,15 @@
-# BELFORT FHE Accelerator
+<p align="center">
+<!-- product name logo -->
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/a81f0598-59b1-4160-95d3-661cab99f6a8">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/a6abe4d5-e849-435c-8319-70029f08d201">
+  <img width=600 alt="Belfort FHE Accelerator">
+</picture>
+</p>
+
+---
+
+# Belfort FHE Accelerator
 
 This repo provides demo applications implemented on TFHE-rs, and enables FPGA acceleration on it.
 
@@ -65,7 +76,7 @@ cargo run --release --package example --bin weighted-sum
 cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
-You should see the result of the weighted-sum complete much faster with the FPGA feature! In case you run into any issues, please open an issue in this repo.
+You should see the result of the weighted-sum complete much faster with the FPGA feature!
 
 ### Other demos
 
@@ -86,7 +97,7 @@ cargo run --release --package fhe-aes --bin demo --features fpga
 
 ## How to migrate your code for FPGA acceleration?
 
-The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find a weighted-sum example with the code differences for both CPU and FPGA execution below.
+The acceleration requires `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find below the weighted-sum example with the code differences for both CPU and FPGA execution.
 
 **Change 5 lines of code:**
 
