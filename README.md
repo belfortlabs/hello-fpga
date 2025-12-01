@@ -35,7 +35,7 @@ ssh -i <ssh_key> <username>@bologna.belfortlabs.cloud
 2. Clone this repo into your home directory
 
 ```bash
-git clone https://github.com/belfortlabs/hello-fpga.git
+git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
 ```
 
 3. Run the setup script
