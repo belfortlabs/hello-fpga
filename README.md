@@ -47,7 +47,7 @@ cd hello-fpga && ./scripts/prepare_env.sh
 4. Set the environment variables
 
 ```bash
-source ~/.cargo/cargo/env
+source ~/.cargo/env
 source /opt/belfort/source_tools
 ```
 
