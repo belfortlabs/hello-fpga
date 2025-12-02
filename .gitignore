@@ -16,3 +16,4 @@ tfhe-rs/
 release/
 release.tar.gz
 release.zip
+.github
