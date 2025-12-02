@@ -247,8 +247,19 @@ fn get_transaction_display(
 
             let time_start = Instant::now();
 
-            let (_encrypted_new_to, _encrypted_new_from) =
+            let (encrypted_new_to, encrypted_new_from) =
                 erc20_transaction(&encrypted_transfer, &encrypted_to, &encrypted_from);
+
+            assert_eq!(
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_to, &client_key),
+                to + amount,
+                "To amount isn't calculated correctly"
+            );
+            assert_eq!(
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_from, &client_key),
+                from - amount,
+                "From amount isn't calculated correctly"
+            );
 
             exec_time = time_start.elapsed();
 
@@ -291,7 +302,7 @@ fn erc20_transaction(
     balance_from: &FheUint64,
 ) -> (FheUint64, FheUint64) {
     let transfer_value = amount
-        .le(balance_to)
+        .le(balance_from)
         .select(amount, &FheUint64::encrypt_trivial(0u64));
 
     let new_balance_to = balance_to + &transfer_value;

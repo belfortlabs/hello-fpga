@@ -46,7 +46,7 @@ ssh -i <ssh_key> <username>@<server_dns_name>
 2. Clone this repo into your home directory
 
 ```bash
-git clone https://github.com/belfortlabs/hello-fpga.git
+git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
 ```
 
 3. Run the setup script
@@ -58,7 +58,7 @@ cd hello-fpga && ./scripts/prepare_env.sh
 4. Set the environment variables
 
 ```bash
-source ~/.cargo/cargo/env
+source ~/.cargo/env
 source /opt/belfort/source_tools
 ```
 
@@ -97,7 +97,7 @@ cargo run --release --package fhe-aes --bin demo --features fpga
 
 ## How to migrate your code for FPGA acceleration?
 
-The acceleration requires `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find below the weighted-sum example with the code differences for both CPU and FPGA execution.
+The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find the weighted-sum example with the code differences for both CPU and FPGA execution below.
 
 **Change 5 lines of code:**
 

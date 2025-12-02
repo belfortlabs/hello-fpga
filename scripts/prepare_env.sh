@@ -47,9 +47,8 @@ fi
 separator
 echo "Update rust if needed"
 
-export ENV_DIR="$HOME/.cargo"
-export RUSTUP_HOME=$ENV_DIR/rustup
-export CARGO_HOME=$ENV_DIR/cargo
+export RUSTUP_HOME="$HOME/.rustup"
+export CARGO_HOME="$HOME/.cargo"
 
 export RUST_SETUP_SH="$REPO_DIR/scripts/rust_setup.sh"
 
@@ -60,9 +59,6 @@ $RUST_SETUP_SH -y --no-modify-path
 rm -f $RUST_SETUP_SH
 
 source "$CARGO_HOME/env"
-
-rustup toolchain install nightly-x86_64-unknown-linux-gnu
-rustup default nightly
 
 pushd $TFHERS_DIR
 make install_rs_check_toolchain
