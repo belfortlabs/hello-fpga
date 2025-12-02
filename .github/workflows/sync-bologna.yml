@@ -3,7 +3,7 @@ name: Sync Bologna Repo
 on:
   push:
     branches:
-      - bologna
+      - feat/add-ci
 
 jobs:
   sync:
@@ -19,13 +19,14 @@ jobs:
         run: |
           git config --global user.email "hello-fpga@belfortlabs.com"
           git config --global user.name "Hello FPGA"
-          git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
+          git clone --branch ${{ env.branch-name }} https://github.com/belfortlabs/hello-fpga.git
           cd hello-fpga
           git remote add internal https://belfortlabs:${{ env.access-token }}@github.com/belfortlabs/hello-fpga-internal.git
           git remote update
-          git merge internal/bologna
+          git merge internal/${{ env.branch-name }}
           # Remove workflow files from the index (but keep them in working directory)
           git rm -r --cached .github/workflows/ || true
-          git push origin bologna
+          git push origin ${{ env.branch-name }}
         env:
           access-token: ${{ secrets.HELLO_FPGA_PAT }}
+          branch-name: feat/add-ci
