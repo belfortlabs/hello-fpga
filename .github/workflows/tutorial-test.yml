@@ -41,6 +41,8 @@ jobs:
             echo "BELFORT_HOME=$BELFORT_HOME"
             echo "BELFORT_FPGA_IDX=$BELFORT_FPGA_IDX"
             echo "BELFORT_FPGA_IMG=$BELFORT_FPGA_IMG"
+            echo "CARGO_HOME=$CARGO_HOME"
+            echo "RUSTUP_HOME=$RUSTUP_HOME"
           } >> "$GITHUB_ENV"
 
       - name: Run weighted-sum example
