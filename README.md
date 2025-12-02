@@ -37,10 +37,10 @@ set_server_key(fpga_key.clone());
 
 ### Prepare execution environment
 
-1. SSH into the `bologna` Belfort development server
+1. SSH into the the Belfort FPGA server assigned to your use
 
 ```bash
-ssh -i <ssh_key> <username>@bologna.belfortlabs.cloud
+ssh -i <ssh_key> <username>@<server_dns_name>
 ```
 
 2. Clone this repo into your home directory
