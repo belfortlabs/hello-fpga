@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - bologna
-  # You can add more triggers, such as scheduled events
-  # schedule:
-  #   - cron: '0 0 * * *'
 
 jobs:
   sync:
@@ -18,17 +15,17 @@ jobs:
         with:
           persist-credentials: "false"
 
-      - name: Push to destination repository
+      - name: Push to public Hello FPGA repository
         run: |
           git config --global user.email "hello-fpga@belfortlabs.com"
           git config --global user.name "Hello FPGA"
-          git clone https://belfortlabs:${{ secrets.PAT }}@github.com/${{ env.ORG_NAME }}/destination-repo.git
-          cd destination-repo
-          git remote add ${{ env.ORIGINAL_REPO_NAME }} https://${{ env.ORG_NAME }}:${{ secrets.PAT }}@github.com/${{ env.ORG_NAME }}/${{ env.ORIGINAL_REPO_NAME }}.git
+          git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
+          cd hello-fpga
+          git remote add internal https://belfortlabs:${{ env.access-token }}@github.com/belfortlabs/hello-fpga-internal.git
           git remote update
-          git merge ${{ env.ORIGINAL_REPO_NAME }}/bologna
+          git merge internal/bologna
+          # Remove workflow files from the index (but keep them in working directory)
+          git rm -r --cached .github/workflows/ || true
           git push origin bologna
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
-          ORIGINAL_REPO_NAME: ${{ github.event.repository.name }}
-          ORG_NAME: belfortlabs
+          access-token: ${{ secrets.HELLO_FPGA_PAT }}
