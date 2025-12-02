@@ -97,7 +97,7 @@ cargo run --release --package fhe-aes --bin demo --features fpga
 
 ## How to migrate your code for FPGA acceleration?
 
-The acceleration requires `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find below the weighted-sum example with the code differences for both CPU and FPGA execution.
+The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find the weighted-sum example with the code differences for both CPU and FPGA execution below.
 
 **Change 5 lines of code:**
 
