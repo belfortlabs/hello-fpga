@@ -108,7 +108,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         let mut new_high = self
             .sk
             .unchecked_scalar_mul(high, high.message_modulus.0 as u8);
-        self.sk.unchecked_add_assign(&mut new_high, &low);
+        self.sk.unchecked_add_assign(&mut new_high, low);
         new_high
     }
 
@@ -120,10 +120,10 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         // Depending on n and batch_size, FPGA can calculate a pack in multiple
         // pipelined batches.
 
-        let func_and = |x, y| (x & y);
+        let func_and = |x, y| x & y;
         let lut_and = self.sk.generate_lookup_vector_bivariate(&func_and);
 
-        let func_xor = |x, y| (x ^ y);
+        let func_xor = |x, y| x ^ y;
         let lut_xor = self.sk.generate_lookup_vector_bivariate(&func_xor);
 
         ////////////////////////////////////////////////////////////////////////
@@ -163,7 +163,7 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
 
         for i in 0..n {
             pack2.push(self.pack_block_assign(&pack1[i * 3 + 2], &self.a[68 - i]));
-            pack2.push(self.pack_block_assign(&pack1[i * 3 + 0], &self.b[77 - i]));
+            pack2.push(self.pack_block_assign(&pack1[i * 3], &self.b[77 - i]));
             pack2.push(self.pack_block_assign(&pack1[i * 3 + 1], &self.c[86 - i]));
         }
 
@@ -185,8 +185,8 @@ impl TriviumStreamFPGAShortint<Ciphertext> {
         let mut pack3_g: Vec<&LookupVector> = Vec::with_capacity(n * 3 + n);
 
         for i in 0..n {
-            pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3 + 2], &pack2[i * 3 + 0]));
-            pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3 + 0], &pack2[i * 3 + 1]));
+            pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3 + 2], &pack2[i * 3]));
+            pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3], &pack2[i * 3 + 1]));
             pack3.push(self.pack_block_assign(&pack1[n * 3 + i * 3 + 1], &pack2[i * 3 + 2]));
         }
 

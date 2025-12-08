@@ -107,10 +107,8 @@ fn main() {
             stdout.flush().unwrap();
             loop {
                 if event::poll(time::Duration::from_millis(100)).unwrap() {
-                    if let Event::Key(key_event) = event::read().unwrap() {
-                        match key_event {
-                            _ => break,
-                        }
+                    if let Event::Key(_) = event::read().unwrap() {
+                        break;
                     }
                 }
             }
@@ -251,12 +249,12 @@ fn get_transaction_display(
                 erc20_transaction(&encrypted_transfer, &encrypted_to, &encrypted_from);
 
             assert_eq!(
-                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_to, &client_key),
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_to, client_key),
                 to + amount,
                 "To amount isn't calculated correctly"
             );
             assert_eq!(
-                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_from, &client_key),
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_from, client_key),
                 from - amount,
                 "From amount isn't calculated correctly"
             );
@@ -387,11 +385,8 @@ fn draw_text(stdout: &mut Stdout, x: u16, y: u16, text: &str, color: Color) {
     let text_width = text.len() as u16;
     let center_x = x + RECT_WIDTH / 2;
     let center_y = y + RECT_HEIGHT / 2;
-    let start_x = if center_x > text_width / 2 {
-        center_x - text_width / 2
-    } else {
-        0
-    };
+    let start_x = center_x.saturating_sub(text_width / 2);
+
     stdout.execute(cursor::MoveTo(start_x, center_y)).unwrap();
     stdout.execute(SetForegroundColor(color)).unwrap();
     print!("{text}");

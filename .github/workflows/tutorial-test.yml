@@ -35,17 +35,22 @@ jobs:
           # shellcheck source=/dev/null
           source /opt/belfort/source_tools
           # Set the environment variables for subsequent steps
-          echo "CARGO_HOME=$CARGO_HOME"
-          echo "HOME=$HOME"
+          . ~/.cargo/env
           {
             echo "XILINX_XRT=$XILINX_XRT"
             echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
             echo "BELFORT_HOME=$BELFORT_HOME"
             echo "BELFORT_FPGA_IDX=$BELFORT_FPGA_IDX"
             echo "BELFORT_FPGA_IMG=$BELFORT_FPGA_IMG"
+            echo "PATH=$PATH"
           } >> "$GITHUB_ENV"
+
+      - name: Repository compiles
+        run: cargo check --features fpga
+
+      - name: Clippy
+        run: rustup component add clippy && cargo clippy --features fpga
 
       - name: Run weighted-sum example
         run: |
-          . ~/.cargo/env
           cargo run --release --package example --bin weighted-sum --features fpga

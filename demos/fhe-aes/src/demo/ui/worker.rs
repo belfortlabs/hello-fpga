@@ -182,13 +182,13 @@ impl WorkerManager for App {
     fn remember_and_maybe_print(&mut self, kind: LogKind, msg: String, color: Color) {
         match kind {
             LogKind::Client => {
-                self.client_history.push((msg.clone(), color.clone()));
+                self.client_history.push((msg.clone(), color));
                 if !self.too_small {
                     let _ = self.client_box.log(&mut self.stdout, &msg, color);
                 }
             }
             LogKind::Server => {
-                self.server_history.push((msg.clone(), color.clone()));
+                self.server_history.push((msg.clone(), color));
                 if !self.too_small {
                     let _ = self.server_box.log(&mut self.stdout, &msg, color);
                 }

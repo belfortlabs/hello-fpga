@@ -161,8 +161,8 @@ pub(crate) fn homomorphic_addition(
     );
     end_step(step_id, true);
 
-    server_log(&format!("!!! Sent for client-side decryption:"), NEWS_COLOR);
-    server_log(&format!("  → Only client will know the result"), NEWS_COLOR);
+    server_log("!!! Sent for client-side decryption:", NEWS_COLOR);
+    server_log("  → Only client will know the result", NEWS_COLOR);
 
     for _ in 0..8 {
         client_log(
@@ -191,7 +191,6 @@ fn gen_key_aes128() -> [u8; AES_128_KEY_SIZE] {
     OsRng.fill_bytes(&mut k);
     k
 }
-
 
 fn encrypt_reference_aes128(
     blocks: &[[u8; AES_BLOCK_SIZE]],
@@ -222,8 +221,7 @@ fn from_fhe_uint128_to_bytes(ct: &FheUint128) -> [RadixCiphertext; 16] {
         .0
         .blocks()
         .chunks(4)
-        .enumerate()
-        .map(|(_i, c)| RadixCiphertext::from(c.to_vec()))
+        .map(|c| RadixCiphertext::from(c.to_vec()))
         .collect::<Vec<_>>()
         .into_iter()
         .rev()

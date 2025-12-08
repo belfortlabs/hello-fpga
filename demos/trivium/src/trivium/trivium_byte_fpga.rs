@@ -107,10 +107,7 @@ where
 
     /// This calls `get_output_and_values` 8 times, and stores all results in a Vec.
     fn get_64_output_and_values(&self) -> Vec<[T; 4]> {
-        (0..8)
-            .into_iter()
-            .map(|i| self.get_output_and_values(i))
-            .collect()
+        (0..8).map(|i| self.get_output_and_values(i)).collect()
     }
 
     /// Computes 64 turns of the stream, outputting the 64 bits (in 8 bytes) all at once in a
