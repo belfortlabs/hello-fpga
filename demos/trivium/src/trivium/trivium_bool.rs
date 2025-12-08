@@ -102,14 +102,12 @@ where
         c_register: [T; 111],
         key: Option<ServerKey>,
     ) -> Self {
-        let ret = Self {
+        Self {
             a: StaticDeque::<93, T>::new(a_register),
             b: StaticDeque::<84, T>::new(b_register),
             c: StaticDeque::<111, T>::new(c_register),
             fhe_key: key,
-        };
-
-        ret
+        }
     }
 
     /// The specification of Trivium includes running 1152 (= 18*64) unused steps to mix up the
@@ -134,9 +132,8 @@ where
 
     /// Computes one turn of the stream, updating registers and outputting the new bit.
     pub fn next_bool(&mut self) -> T {
-        match &self.fhe_key {
-            Some(sk) => set_server_key(sk.clone()),
-            None => (),
+        if let Some(sk) = &self.fhe_key {
+            set_server_key(sk.clone())
         };
 
         let [o, a, b, c] = self.get_output_and_values(0);
@@ -210,18 +207,14 @@ where
     /// Computes 64 turns of the stream, outputting the 64 bits all at once in a
     /// Vec (first value is oldest, last is newest)
     pub fn next_64(&mut self) -> Vec<T> {
-        match &self.fhe_key {
-            Some(sk) => {
-                rayon::broadcast(|_| set_server_key(sk.clone()));
-            }
-            None => (),
+        if let Some(sk) = &self.fhe_key {
+            rayon::broadcast(|_| set_server_key(sk.clone()));
         }
+
         let mut values = self.get_64_output_and_values();
-        match &self.fhe_key {
-            Some(_) => {
-                rayon::broadcast(|_| unset_server_key());
-            }
-            None => (),
+
+        if self.fhe_key.is_some() {
+            rayon::broadcast(|_| unset_server_key());
         }
 
         let mut ret = Vec::<T>::with_capacity(64);
@@ -245,18 +238,14 @@ where
     }
 
     pub fn next_n(&mut self, n: usize) -> Vec<T> {
-        match &self.fhe_key {
-            Some(sk) => {
-                rayon::broadcast(|_| set_server_key(sk.clone()));
-            }
-            None => (),
+        if let Some(sk) = &self.fhe_key {
+            rayon::broadcast(|_| set_server_key(sk.clone()));
         }
+
         let mut values = self.get_n_output_and_values(n);
-        match &self.fhe_key {
-            Some(_) => {
-                rayon::broadcast(|_| unset_server_key());
-            }
-            None => (),
+
+        if self.fhe_key.is_some() {
+            rayon::broadcast(|_| unset_server_key());
         }
 
         let mut ret = Vec::<T>::with_capacity(64);

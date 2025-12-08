@@ -17,7 +17,7 @@ pub trait FheAesCiphertextUtils {
     fn duplicate_radix4_packed_chunks(&self, chunks: &[Ciphertext]) -> Vec<Ciphertext>;
 }
 
-impl<'a> FheAesCiphertextUtils for BelfortServerKey {
+impl FheAesCiphertextUtils for BelfortServerKey {
     /// Packs two 2-bit ciphertexts into a single 4-bit ciphertext using radix-4 encoding.
     ///
     /// "ct_low" is treated as the least significant 2 bits, and "ct_high" is multiplied by 4
@@ -32,12 +32,10 @@ impl<'a> FheAesCiphertextUtils for BelfortServerKey {
     fn pack_radix4(&self, ct_low: &Ciphertext, ct_high: &Ciphertext) -> Ciphertext {
         let shortint_key = &self.pbs_key().key;
 
-        let mut ct_low_mut = ct_low.clone();
-
-        let mut ct_high_shifted = shortint_key
+        let ct_high_shifted = shortint_key
             .unchecked_scalar_mul(ct_high, shortint_key.message_modulus.0.try_into().unwrap());
 
-        shortint_key.unchecked_add(&mut ct_low_mut, &mut ct_high_shifted)
+        shortint_key.unchecked_add(ct_low, &ct_high_shifted)
     }
 
     /// Packs the corresponding elements of two equally‑long vectors using "pack_radix4".
@@ -79,7 +77,7 @@ impl<'a> FheAesCiphertextUtils for BelfortServerKey {
     /// # Returns
     /// - "Vec<Ciphertext>" of packed elements.
     fn split_and_pack(&self, cts: &[Ciphertext], chunk_size: usize) -> Vec<Ciphertext> {
-        let (even_chunks, odd_chunks) = split_chunks_even_odd(&cts, chunk_size);
+        let (even_chunks, odd_chunks) = split_chunks_even_odd(cts, chunk_size);
 
         self.pack_slices(&even_chunks, &odd_chunks)
     }
@@ -216,7 +214,7 @@ pub fn interleave_chunks_of_two(a: &[Ciphertext], b: &[Ciphertext]) -> Vec<Ciphe
 /// Panics if `data.len()` is not a multiple of `chunks_size`.
 pub fn repeat_chunks_n_times<T: Clone>(data: &[T], chunks_size: usize, times: usize) -> Vec<T> {
     assert!(
-        data.len() % chunks_size == 0,
+        data.len().is_multiple_of(chunks_size),
         "input length ({}) must be a multiple of {}",
         data.len(),
         chunks_size
@@ -302,13 +300,10 @@ pub fn split_chunks_even_odd(
 pub fn repeat_luts_cycled(base: &[LookupVector], repeat_count: usize) -> Vec<&LookupVector> {
     let base_len = base.len();
 
-    let packed_luts = base
-        .iter()
+    base.iter()
         .cycle()
         .take(base_len * repeat_count)
-        .collect::<Vec<_>>();
-
-    packed_luts
+        .collect::<Vec<_>>()
 }
 
 /// Zips two ciphertext slices element-wise and interleaves them.

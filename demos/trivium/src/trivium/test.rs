@@ -359,13 +359,14 @@ use tfhe::shortint::prelude::*;
 
 #[test]
 fn trivium_test_shortint_long() {
+    use tfhe::shortint::parameters::v0_11::key_switching::p_fail_2_minus_64::ks_pbs::V0_11_PARAM_KEYSWITCH_1_1_KS_PBS_TO_2_2_KS_PBS;
+
     let config = ConfigBuilder::default().build();
     let (hl_client_key, hl_server_key) = generate_keys(config);
     let underlying_ck: tfhe::shortint::ClientKey = (*hl_client_key.as_ref()).clone().into();
     let underlying_sk: tfhe::shortint::ServerKey = (*hl_server_key.as_ref()).clone().into();
 
-    let (client_key, server_key): (ClientKey, ServerKey) =
-        gen_keys(V0_11_PARAM_MESSAGE_1_CARRY_1_KS_PBS_GAUSSIAN_2M64);
+    let (client_key, server_key): (ClientKey, ServerKey) = gen_keys(PARAM_MESSAGE_2_CARRY_2);
 
     let ksk = KeySwitchingKey::new(
         (&client_key, Some(&server_key)),

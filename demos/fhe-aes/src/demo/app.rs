@@ -122,12 +122,13 @@ impl App {
                 if self.too_small {
                     self.warn_resize(size()?)?;
                 }
-                if self.current_job.is_none() && self.result_opt.is_none() && !self.too_small {
-                    if let Err(e) = self.prompt_operands_and_start_job() {
-                        if e.kind() != ErrorKind::Other {
-                            break;
-                        }
-                    }
+                if self.current_job.is_none()
+                    && self.result_opt.is_none()
+                    && !self.too_small
+                    && let Err(e) = self.prompt_operands_and_start_job()
+                    && e.kind() != ErrorKind::Other
+                {
+                    break;
                 }
             }
             self.drain_worker_messages()?;
@@ -136,10 +137,10 @@ impl App {
     }
 
     pub(crate) fn maybe_handle_resize(&mut self) -> Result<()> {
-        if let Ok(new_size) = size() {
-            if new_size != self.last_size {
-                self.on_resize(new_size)?;
-            }
+        if let Ok(new_size) = size()
+            && new_size != self.last_size
+        {
+            self.on_resize(new_size)?;
         }
         Ok(())
     }
@@ -192,7 +193,7 @@ impl App {
             Ok(v) => Ok(v),
             Err(ref e) if e.kind() == ErrorKind::Other => {
                 self.reset_ui()?;
-                Err(io::Error::new(ErrorKind::Other, "restart"))
+                Err(io::Error::other("restart"))
             }
             Err(e) => Err(e),
         }
@@ -233,12 +234,12 @@ impl App {
 
             match event::read()? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
-                    if self.should_exit(&Event::Key(k.clone())) {
+                    if self.should_exit(&Event::Key(k)) {
                         return Err(Error::new(ErrorKind::Interrupted, "User requested exit."));
                     }
 
-                    if self.should_restart(&Event::Key(k.clone())) {
-                        return Err(Error::new(ErrorKind::Other, "User requested restart."));
+                    if self.should_restart(&Event::Key(k)) {
+                        return Err(Error::other("User requested restart."));
                     }
 
                     match k.code {
@@ -427,7 +428,7 @@ impl App {
                     num_lines += 1;
                     continue;
                 }
-                let chunks = (stripped_txt.len() + max_len_per_line - 1) / max_len_per_line;
+                let chunks = stripped_txt.len().div_ceil(max_len_per_line);
                 num_lines += chunks as u16;
             }
         }

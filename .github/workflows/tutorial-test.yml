@@ -1,0 +1,56 @@
+name: Run tests on self-hosted runner
+
+permissions:
+  contents: "read"
+
+on:
+  schedule:
+    # Run every Sunday at 00:00
+    - cron: '0 0 * * 0'
+  pull_request:
+    types: [ "ready_for_review" ]
+
+jobs:
+  test-check:
+    runs-on: [self-hosted, bologna]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+        with:
+          persist-credentials: "false"
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Setup Hello FPGA Environment
+        run: |
+          ./scripts/prepare_env.sh
+          # shellcheck source=/dev/null
+          source /opt/belfort/source_tools
+          # Set the environment variables for subsequent steps
+          . ~/.cargo/env
+          {
+            echo "XILINX_XRT=$XILINX_XRT"
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+            echo "BELFORT_HOME=$BELFORT_HOME"
+            echo "BELFORT_FPGA_IDX=$BELFORT_FPGA_IDX"
+            echo "BELFORT_FPGA_IMG=$BELFORT_FPGA_IMG"
+            echo "PATH=$PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Repository compiles
+        run: cargo check --features fpga
+
+      - name: Clippy
+        run: rustup component add clippy && cargo clippy --features fpga
+
+      - name: Run weighted-sum example
+        run: |
+          cargo run --release --package example --bin weighted-sum --features fpga
