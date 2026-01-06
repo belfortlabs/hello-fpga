@@ -21,8 +21,6 @@
 * SOFTWARE.
 */
 
-#[cfg(feature = "fpga")]
-use tfhe::core_crypto::fpga::keyswitch_bootstrap::KeyswitchBootstrapPacked;
 use tfhe::core_crypto::fpga::lookup_vector::LookupVector;
 use tfhe::shortint::prelude::*;
 
@@ -140,6 +138,9 @@ impl App {
         self.character_index = 0;
     }
 
+    #[cfg(feature = "fpga")]
+    const LUT_SIZE: usize = data::NAME_LIST.len();
+
     pub fn process_enc_query_enc_db(&mut self, enc_struct: &mut EncStruct) {
         // Get the min and max lenght of the db strings
         let qlen = enc_struct.query.len() + 1;
@@ -215,9 +216,9 @@ impl App {
         let lut_eq_vec = vec![lut_eq; enc_struct.db_size];
         let lut_min_vec = vec![lut_min; enc_struct.db_size];
 
-        let lut_1eq_fpga = LookupVector::new(&lut_1eq_vec_def);
-        let lut_eq_fpga = LookupVector::new(&lut_eq_vec_def);
-        let lut_min_fpga = LookupVector::new(&lut_min_vec_def);
+        let lut_1eq_fpga = LookupVector::new(lut_1eq_vec_def);
+        let lut_eq_fpga = LookupVector::new(lut_eq_vec_def);
+        let lut_min_fpga = LookupVector::new(lut_min_vec_def);
 
         let lut_1eq_vec_fpga = vec![lut_1eq_fpga; enc_struct.db_size];
         let lut_eq_vec_fpga = vec![lut_eq_fpga; enc_struct.db_size];
@@ -331,7 +332,7 @@ impl App {
             .generate_lookup_table_from_vector(&lut_min_vec_def);
         let lut_min_vec = vec![lut_min; enc_struct.db_size];
 
-        let fpga_lut_single = LookupVector::new(&lut_min_vec_def);
+        let fpga_lut_single = LookupVector::new(lut_min_vec_def);
         let lut_min_vec_fpga = vec![fpga_lut_single; enc_struct.db_size];
 
         enc_struct.max_factor = max_factor;
@@ -370,10 +371,13 @@ impl App {
                 if fpga_enable {
                     eq1_lut = eq1.clone();
                     #[cfg(feature = "fpga")]
-                    enc_struct
-                        .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut eq1_lut, &enc_struct.lut_1eq_vec_fpga);
+                    {
+                        let ref_lookupvector: [&LookupVector; Self::LUT_SIZE] =
+                            std::array::from_fn(|i| &enc_struct.lut_1eq_vec_fpga[i]);
+                        enc_struct
+                            .fpga_key
+                            .apply_lookup_vector_packed_assign(&mut eq1_lut, &ref_lookupvector);
+                    }
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -406,10 +410,13 @@ impl App {
                 if fpga_enable {
                     eq2_lut = eq2.clone();
                     #[cfg(feature = "fpga")]
-                    enc_struct.fpga_key.apply_lookup_vector_packed_assign(
-                        &mut eq2_lut,
-                        &enc_struct.lut_eq_vec_fpga,
-                    );
+                    {
+                        let ref_lookupvector: [&LookupVector; Self::LUT_SIZE] =
+                            std::array::from_fn(|i| &enc_struct.lut_eq_vec_fpga[i]);
+                        enc_struct
+                            .fpga_key
+                            .apply_lookup_vector_packed_assign(&mut eq2_lut, &ref_lookupvector);
+                    }
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -443,11 +450,15 @@ impl App {
 
                 if fpga_enable {
                     ct_res = key.clone();
+
                     #[cfg(feature = "fpga")]
-                    enc_struct
-                        .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                    {
+                        let ref_lookupvector: [&LookupVector; Self::LUT_SIZE] =
+                            std::array::from_fn(|i| &enc_struct.lut_min_vec_fpga[i]);
+                        enc_struct
+                            .fpga_key
+                            .apply_lookup_vector_packed_assign(&mut ct_res, &ref_lookupvector);
+                    }
                 } else {
                     let ct = apply_lookup_table_packed(
                         &enc_struct.sks,
@@ -516,11 +527,15 @@ impl App {
                 let mut ct_res: Vec<Ciphertext>;
                 if fpga_enable {
                     ct_res = key.clone();
+
                     #[cfg(feature = "fpga")]
-                    enc_struct
-                        .fpga_key
-                        .fpga_utils
-                        .keyswitch_bootstrap_packed(&mut ct_res, &enc_struct.lut_min_vec_fpga);
+                    {
+                        let ref_lookupvector: [&LookupVector; Self::LUT_SIZE] =
+                            std::array::from_fn(|i| &enc_struct.lut_min_vec_fpga[i]);
+                        enc_struct
+                            .fpga_key
+                            .apply_lookup_vector_packed_assign(&mut ct_res, &ref_lookupvector);
+                    }
                 } else {
                     ct_res = apply_lookup_table_packed(
                         &enc_struct.sks,
