@@ -51,6 +51,12 @@ fn main() {
         use tfhe::integer::ServerKey as IntegerServerKey;
         use tfhe_trivium::TriviumStreamFPGAShortint;
 
+        #[cfg(not(feature = "emulate_fpga"))]
+        println!("\r      Running on FPGA.         ");
+
+        #[cfg(feature = "emulate_fpga")]
+        println!("\r      Running on FPGA emulation.         ");
+
         let integer_server_key =
             IntegerServerKey::new_radix_server_key_from_shortint(server_key.clone());
         let fpga_key = BelfortServerKey::from(&integer_server_key);
@@ -60,7 +66,13 @@ fn main() {
     };
     #[cfg(not(feature = "fpga"))]
     let mut trivium = {
-        use tfhe::{generate_keys, ConfigBuilder};
+        use tfhe::{
+            generate_keys,
+            shortint::parameters::v0_11::key_switching::p_fail_2_minus_64::ks_pbs::V0_11_PARAM_KEYSWITCH_1_1_KS_PBS_TO_2_2_KS_PBS,
+            ConfigBuilder,
+        };
+
+        println!("\r      Running on CPU.         ");
 
         let ksk = KeySwitchingKey::new(
             (&client_key, Some(&server_key)),
@@ -94,7 +106,7 @@ fn main() {
 
             let decrypted_bits: Vec<_> = cipher_outputs
                 .iter()
-                .map(|item| client_key.decrypt(&item))
+                .map(|item| client_key.decrypt(item))
                 .collect();
 
             let hexstring = hex_string_from_vec(decrypted_bits);
@@ -102,12 +114,12 @@ fn main() {
             io::stdout().flush().unwrap();
         }
 
-        print!(" \x1b[90m{:?}\x1b[0m\n", elapsed);
+        println!(" \x1b[90m{:?}\x1b[0m", elapsed);
     }
 }
 
 fn hex_string_from_vec(a: Vec<u64>) -> String {
-    assert!(a.len() % 8 == 0);
+    assert!(a.len().is_multiple_of(8));
     let mut hexadecimal: String = String::new();
 
     for test in a.chunks(8) {
@@ -116,9 +128,8 @@ fn hex_string_from_vec(a: Vec<u64>) -> String {
         let low_bits = [test[0] & 1, test[1] & 1, test[2] & 1, test[3] & 1];
 
         let high_val =
-            (high_bits[0] << 0) | (high_bits[1] << 1) | (high_bits[2] << 2) | (high_bits[3] << 3);
-        let low_val =
-            (low_bits[0] << 0) | (low_bits[1] << 1) | (low_bits[2] << 2) | (low_bits[3] << 3);
+            high_bits[0] | (high_bits[1] << 1) | (high_bits[2] << 2) | (high_bits[3] << 3);
+        let low_val = low_bits[0] | (low_bits[1] << 1) | (low_bits[2] << 2) | (low_bits[3] << 3);
 
         hexadecimal.push(
             std::char::from_digit(high_val as u32, 16)

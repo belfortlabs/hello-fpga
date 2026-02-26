@@ -1,4 +1,15 @@
-# BELFORT FHE Accelerator
+<p align="center">
+<!-- product name logo -->
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/a81f0598-59b1-4160-95d3-661cab99f6a8">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/a6abe4d5-e849-435c-8319-70029f08d201">
+  <img width=600 alt="Belfort FHE Accelerator">
+</picture>
+</p>
+
+---
+
+# Belfort FHE Accelerator
 
 This repo provides demo applications implemented on TFHE-rs, and enables FPGA acceleration on it.
 
@@ -20,45 +31,38 @@ set_server_key(fpga_key.clone());
 // The rest of your code stays unchanged
 ```
 
-:warning: This is the early access version of the Belfort FHE Accelerator, demonstrating its functionality on AWS.
+:warning: This is the early access version of the Belfort FHE Accelerator.
 
 ## How to run a demo?
 
-### Setup your AWS Account
-
-AWS accounts do not have access to F2 instances by default. You need to file [quota increase request](https://aws.amazon.com/getting-started/hands-on/request-service-quota-increase/) for the `Running On-Demand F instances` service, which you can search for under `Service Quotas > Amazon Elastic Compute Cloud (Amazon EC2)`. Make sure to combine your request with **at least 24 vCPU cores**, as `f2.6xlarge` requires 24 vCPUs. The quota increase may take up to a few days to process.
-
-In your communication to AWS, please pay attention that the F2 access permissions are tied to a region. **The FPGA image is available in all the F2 instance regions of today, which are `us-east-1`, `us-west-2`, `ap-southeast-2` and `eu-west-2`**.
-
-### Launch an F2 instance
-
-Launch an AWS EC2 F2 instance based on our public Amazon Machine Image (AMI).
-
-- AMI: [Belfort FPGA Acceleration AMI](https://aws.amazon.com/marketplace/pp/prodview-imfiyzy7svjgu) on the AWS Marketplace.
-  - This AMI by Belfort is ready-to-use.
-  - It's free of charge, but AWS EC2 fees apply
-- Instance types: `f2.6xlarge` / `f2.12xlarge` / `f2.48xlarge`
-
-Pick the instance type depending on how much FPGA acceleration you want;
-  - `f2.6xlarge` for 1 FPGA (requires access to 24 vCPUs)
-  - `f2.12xlarge` for 2 FPGAs (requires access to 48 vCPUs)
-  - `f2.48xlarge` for 8 FPGAs (requires access to 192 vCPUs)
-
 ### Prepare execution environment
 
-1. SSH into your instance with your credentials
+1. SSH into the the Belfort FPGA server assigned to your use
 
 ```bash
-ssh -i <id.pem> ubuntu@<instance_public_dns>
+ssh -i <ssh_key> <username>@<server_dns_name>
 ```
 
-2. Clone this repo into your AWS instance
+2. Clone this repo into your home directory
 
-3. Run `prepare_env.sh` for cloning TFHE-rs and patching it with the Belfort extensions
+```bash
+git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
+```
+
+3. Run the setup script
 
 ```bash
 cd hello-fpga && ./scripts/prepare_env.sh
 ```
+
+4. Set the environment variables
+
+```bash
+source ~/.cargo/env
+source /opt/belfort/source_tools
+```
+
+Note: add the above lines to your `.bashrc` file to automatically source the environment variables when you log in.
 
 ### Run the weighted-sum tutorial
 
@@ -72,29 +76,33 @@ cargo run --release --package example --bin weighted-sum
 cargo run --release --package example --bin weighted-sum --features fpga
 ```
 
-You should see the result of the weighted-sum complete much faster with the FPGA feature! In case you run into any issues, please open an issue in this repo.
+You should see the result of the weighted-sum complete much faster with the FPGA feature!
 
 ### Other demos
 
 This repository also contains more comprehensive demo applications. Below you can find the applications and the related commands. They should be run from the root repository and expects an [initialized environment](#prepare-execution-environment).
 
-#### Trivium
+#### AES
 
-[The Trivium demo](/demos/trivium/README.md) contains the transciphering of trivium into FHE. Below you can find its execution command:
+[AES demo](/demos/fhe-aes/README.md) implements the transciphering of AES into FHE. You can run the interactive demo with:
 
 ```bash
-# With FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint --features fpga
-
-# Without FPGA acceleration
-cargo run --release --package tfhe-trivium --bin demo-shortint
+cargo run --release --package fhe-aes --bin demo --features fpga
 ```
+
+#### Other Demos:
+
+- [ERC20 demo](/demos/erc20/README.md) is a terminal-based Rust demo that visualizes encrypted ERC20-like token transactions.
+- [Trivium demo](/demos/trivium/README.md) for the transciphering of trivium into FHE.
 
 ## How to migrate your code for FPGA acceleration?
 
-The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find a weighted-sum example with the code differences for both CPU and FPGA execution below.
+The acceleration requires a `BelfortServerKey` created from the `server_key`, which connects to the FPGA cores. You can find the weighted-sum example with the code differences for both CPU and FPGA execution below.
 
 **Change 5 lines of code:**
+
+The changes focus solely on key creation, which is standard for every TFHE application. The modifications are limited to using `fpga_key` as your `server_key`. All other computation code remains unchanged and will automatically benefit from FPGA acceleration.
+
 
 ```Rust
 /// Import dependencies                                         // Import dependencies
@@ -141,7 +149,7 @@ These are the only changes to your code to enable FPGA acceleration.
 ### Specify FPGA cores
 
 If you want to specify the number of FPGA cores to use, you can use the alternative `connect_to()` instead of the `connect()` function.
-This can be useful for development purposes or distributing access of the resources to multiple users. 
+This can be useful for development purposes or distributing access of the resources to multiple users.
 
 ```Rust
 let mut fpga_key = BelfortServerKey::from(&server_key);
@@ -151,21 +159,23 @@ set_server_key(fpga_key);
 
 ### Caveats
 
-- Additional commands are available to interact with the FPGA's:
-  - `fpga-program`: programs the fpga's with the Belfort FPGA image released on AWS.
-                    This command is only required if the FPGA's were reset.
-  - `fpga-reset`:   Resets the fpga images. This is useful if you kill your app with `Ctrl+C` while it interacts with the FPGAs,
-                    and the FPGAs are in a bad state.
-- **In case you run your programs without the fpga's programmed, you will get segmentation faults.**
 - Lesser used operations are stubbed out with a software implementation. Our team is continuously replacing them with HW optimized versions.
-- Enabling the logger gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
+- Enabling the logger ([as in env_logger::init(); in the tutorial](./tutorials/src/main.rs#L12)) gives you runtime warnings if a non-accelerated function is used. Contact us if you would like priority support for a function that emits a warning.
 - Current implementations use FFT, but NTT support is under development.
 - Development for a specialized cloud environment with optimized performance is ongoing.
+- The FPGAs can also be emulated while running the demos (useful when hardware access is unavailable) by replacing:
+    ```bash
+    --features fpga
+    ```
+    with:
+    ```bash
+    --features "fpga,emulate_fpga"
+    ```
+
 
 ### Contributors
 
-- [Wouter Legiest](https://github.com/wouterlegiest), developer of the Leuvenshtein demo
-
+- [Beren Aydoğan](https://github.com/berenaydogan), developer of the AES demo
 
 ### License
 

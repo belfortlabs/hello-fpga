@@ -58,13 +58,13 @@ fn main() {
         print!("{}", hexstring);
         io::stdout().flush().unwrap();
 
-        print!(" \x1b[90m{:?}\x1b[0m\n", elapsed);
+        println!(" \x1b[90m{:?}\x1b[0m", elapsed);
     }
     println!("The end!");
 }
 
 fn get_hexagonal_string_from_bytes(a: Vec<u8>) -> String {
-    assert!(a.len() % 8 == 0);
+    assert!(a.len().is_multiple_of(8));
     let mut hexadecimal: String = "".to_string();
     for test in a {
         hexadecimal.push_str(&format!("{:02X?}", test));

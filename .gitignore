@@ -8,7 +8,7 @@ target/
 tfhe-rs/
 
 # Release related;
-#  
+#
 #     mkdir release
 #     rsync -a --exclude='.git' --exclude-from='.gitignore' . release/
 #     tar -cvf release.tar.gz -C release .
@@ -16,3 +16,4 @@ tfhe-rs/
 release/
 release.tar.gz
 release.zip
+.github

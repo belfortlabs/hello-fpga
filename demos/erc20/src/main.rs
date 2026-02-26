@@ -25,7 +25,11 @@ const NAMES: &[&str] = &[
 ];
 
 const INSTRUCTIONS: &[&str] = &[
-    "Press 'f' to switch to FPGA execution",
+    if cfg!(feature = "emulate_fpga") {
+        "Press 'f' to switch to FPGA emulation"
+    } else {
+        "Press 'f' to switch to FPGA execution"
+    },
     "Press 'c' to switch to CPU execution",
     "Press 'q' to quit",
 ];
@@ -103,10 +107,8 @@ fn main() {
             stdout.flush().unwrap();
             loop {
                 if event::poll(time::Duration::from_millis(100)).unwrap() {
-                    if let Event::Key(key_event) = event::read().unwrap() {
-                        match key_event {
-                            _ => break,
-                        }
+                    if let Event::Key(_) = event::read().unwrap() {
+                        break;
                     }
                 }
             }
@@ -243,8 +245,19 @@ fn get_transaction_display(
 
             let time_start = Instant::now();
 
-            let (_encrypted_new_to, _encrypted_new_from) =
+            let (encrypted_new_to, encrypted_new_from) =
                 erc20_transaction(&encrypted_transfer, &encrypted_to, &encrypted_from);
+
+            assert_eq!(
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_to, client_key),
+                to + amount,
+                "To amount isn't calculated correctly"
+            );
+            assert_eq!(
+                <FheUint64 as FheDecrypt<u64>>::decrypt(&encrypted_new_from, client_key),
+                from - amount,
+                "From amount isn't calculated correctly"
+            );
 
             exec_time = time_start.elapsed();
 
@@ -287,7 +300,7 @@ fn erc20_transaction(
     balance_from: &FheUint64,
 ) -> (FheUint64, FheUint64) {
     let transfer_value = amount
-        .le(balance_to)
+        .le(balance_from)
         .select(amount, &FheUint64::encrypt_trivial(0u64));
 
     let new_balance_to = balance_to + &transfer_value;
@@ -372,11 +385,8 @@ fn draw_text(stdout: &mut Stdout, x: u16, y: u16, text: &str, color: Color) {
     let text_width = text.len() as u16;
     let center_x = x + RECT_WIDTH / 2;
     let center_y = y + RECT_HEIGHT / 2;
-    let start_x = if center_x > text_width / 2 {
-        center_x - text_width / 2
-    } else {
-        0
-    };
+    let start_x = center_x.saturating_sub(text_width / 2);
+
     stdout.execute(cursor::MoveTo(start_x, center_y)).unwrap();
     stdout.execute(SetForegroundColor(color)).unwrap();
     print!("{text}");
