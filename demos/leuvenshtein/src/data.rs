@@ -23,7 +23,9 @@
 * SOFTWARE.
 */
 
-pub const NAME_LIST: [&str; 48] = [
+pub const LUT_SIZE: usize = 48;
+
+pub const NAME_LIST: [&str; LUT_SIZE] = [
     "Wouter Legiest",
     "Jan-Pieter D'Anvers",
     "Ingrid Verbauwhede",

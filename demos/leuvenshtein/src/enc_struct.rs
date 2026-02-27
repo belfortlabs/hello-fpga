@@ -21,19 +21,20 @@
 * SOFTWARE.
 */
 
-
-
 use std::collections::HashMap;
 use std::time::Instant;
 use tfhe::core_crypto::fpga::lookup_vector::LookupVector;
+#[cfg(feature = "fpga")]
+use tfhe::integer::ServerKey as IntegerServerKey;
 use tfhe::shortint::prelude::*;
+
+use crate::data::NAME_LIST;
 
 #[cfg(feature = "fpga")]
 use tfhe::integer::fpga::BelfortServerKey;
 
 // Struct to maintain the state of the complete application
-
-#[cfg(not(feature = "fpga"))]
+#[cfg(feature = "fpga")]
 pub struct EncStruct {
     pub input: String,
     pub query: String,
@@ -49,7 +50,7 @@ pub struct EncStruct {
     pub sks: ServerKey,
     pub cks: ClientKey,
     #[cfg(feature = "fpga")]
-    pub fpga_key: &'static mut BelfortServerKey,
+    pub fpga_key: BelfortServerKey,
     pub one_enc_vec: Vec<tfhe::shortint::Ciphertext>,
     pub v_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
     pub h_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
@@ -61,29 +62,49 @@ pub struct EncStruct {
     pub lut_eq_vec_fpga: Vec<LookupVector>,
 }
 
-#[cfg(feature = "fpga")]
-pub struct EncStruct<'a> {
-    pub input: String,
-    pub query: String,
-    pub max_factor: usize,
-    pub db_size: usize,
-    pub th: usize,
-    pub time: Instant,
-    pub q_enc: Vec<tfhe::shortint::Ciphertext>,
-    pub q2_enc: Vec<tfhe::shortint::Ciphertext>,
-    pub db_enc_matrix: Vec<Vec<tfhe::shortint::Ciphertext>>,
-    pub db1_enc_matrix: Vec<Vec<tfhe::shortint::Ciphertext>>,
-    pub db_enc_map: HashMap<usize, HashMap<char, Vec<tfhe::shortint::Ciphertext>>>,
-    pub sks: ServerKey,
-    pub cks: ClientKey,
-    pub fpga_key: &'a mut BelfortServerKey,
-    pub one_enc_vec: Vec<tfhe::shortint::Ciphertext>,
-    pub v_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
-    pub h_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
-    pub lut_min_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_1eq_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_eq_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_min_vec_fpga: Vec<LookupVector>,
-    pub lut_1eq_vec_fpga: Vec<LookupVector>,
-    pub lut_eq_vec_fpga: Vec<LookupVector>,
+impl EncStruct {
+    pub fn new(
+        max_factor: usize,
+        db_processed: HashMap<usize, HashMap<char, Vec<tfhe::shortint::Ciphertext>>>,
+        cks: ClientKey,
+    ) -> Self {
+        let sks: ServerKey = ServerKey::new(&cks);
+
+        #[cfg(feature = "fpga")]
+        let fpga_key = {
+            let integer_server_key =
+                IntegerServerKey::new_radix_server_key_from_shortint(sks.clone());
+
+            let mut fpga_key = BelfortServerKey::from(&integer_server_key);
+            fpga_key.connect();
+            fpga_key
+        };
+
+        Self {
+            input: String::new(),
+            query: String::new(),
+            max_factor,
+            db_size: NAME_LIST.len(),
+            th: 0,
+            time: Instant::now(),
+            q_enc: Vec::new(),
+            q2_enc: Vec::new(),
+            db_enc_matrix: Vec::new(),
+            db1_enc_matrix: Vec::new(),
+            db_enc_map: db_processed,
+            sks,
+            cks,
+            #[cfg(feature = "fpga")]
+            fpga_key,
+            one_enc_vec: Vec::new(),
+            v_matrices: Vec::new(),
+            h_matrices: Vec::new(),
+            lut_1eq_vec_sw: Vec::new(),
+            lut_eq_vec_sw: Vec::new(),
+            lut_min_vec_sw: Vec::new(),
+            lut_1eq_vec_fpga: Vec::new(),
+            lut_eq_vec_fpga: Vec::new(),
+            lut_min_vec_fpga: Vec::new(),
+        }
+    }
 }

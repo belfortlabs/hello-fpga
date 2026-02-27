@@ -103,14 +103,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     params.carry_modulus = CarryModulus(1);
 
     let cks: ClientKey = ClientKey::new(params);
-    let sks: ServerKey = ServerKey::new(&cks);
-
-    #[cfg(feature = "fpga")]
-    let integer_server_key: IntegerServerKey =
-        tfhe::integer::ServerKey::new_radix_server_key_from_shortint(sks.clone());
-
-    #[cfg(feature = "fpga")]
-    let mut fpga_key = BelfortServerKey::from(&integer_server_key);
 
     let db_size = data::NAME_LIST.len();
     let db_max_size = data::NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0);
@@ -141,37 +133,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         db_processed.insert(k, peq);
     }
 
-    let mut enc_struct = EncStruct {
-        input: String::new(),
-        query: String::new(),
-        max_factor,
-        db_size: data::NAME_LIST.len(),
-        th: 0,
-        time: Instant::now(),
-        q_enc: Vec::new(),
-        q2_enc: Vec::new(),
-        db_enc_matrix: Vec::new(),
-        db1_enc_matrix: Vec::new(),
-        db_enc_map: db_processed,
-        sks,
-        cks,
-        #[cfg(feature = "fpga")]
-        fpga_key: &mut fpga_key,
-        one_enc_vec: Vec::new(),
-        v_matrices: Vec::new(),
-        h_matrices: Vec::new(),
-        lut_1eq_vec_sw: Vec::new(),
-        lut_eq_vec_sw: Vec::new(),
-        lut_min_vec_sw: Vec::new(),
-        lut_1eq_vec_fpga: Vec::new(),
-        lut_eq_vec_fpga: Vec::new(),
-        lut_min_vec_fpga: Vec::new(),
-    };
-
-    #[cfg(feature = "fpga")]
-    {
-        enc_struct.fpga_key.connect();
-    }
+    let mut enc_struct = EncStruct::new(max_factor, db_processed, cks);
 
     loop {
         terminal.draw(|f| ui(f, &app, &enc_struct))?;
@@ -180,25 +142,29 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         if fpga || matches!(app.input_mode, InputMode::Process) {
             if enc_struct.input.starts_with("p:") {
                 if app.progress_done.is_empty() {
-                    app.process_plain_query_enc_db(&mut enc_struct);
+                    process_plain_query_enc_db(&mut enc_struct);
                     app.progress_done.push(0);
-                    app.process_plain_part_i(1, &mut enc_struct, fpga);
+                    process_plain_part_i(1, &mut enc_struct, fpga);
+                    app.progress_done.push(1);
                 } else if app.progress_done.len() >= enc_struct.max_factor {
                     app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {
-                    app.process_plain_part_i(app.progress_done.len(), &mut enc_struct, fpga);
+                    process_plain_part_i(app.progress_done.len(), &mut enc_struct, fpga);
+                    app.progress_done.push(app.progress_done.len() as u8);
                 }
             } else {
                 if app.progress_done.is_empty() {
                     process_enc_query_enc_db(&mut enc_struct);
                     app.progress_done.push(0);
-                    app.process_part_i(1, &mut enc_struct, fpga);
+                    process_part_i(1, &mut enc_struct, fpga);
+                    app.progress_done.push(1);
                 } else if app.progress_done.len() >= enc_struct.max_factor {
                     app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {
-                    app.process_part_i(app.progress_done.len(), &mut enc_struct, fpga);
+                    process_part_i(app.progress_done.len(), &mut enc_struct, fpga);
+                    app.progress_done.push(app.progress_done.len() as u8);
                 }
             }
         } else if let Event::Key(key) = event::read()? {
