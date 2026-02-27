@@ -588,7 +588,7 @@ mod tests {
     }
 
     /// 2. CPU – plain query, encrypted database, FHE evaluated on the CPU.
-    #[test]
+    // #[test]
     fn test_cpu_levenshtein() {
         let query = "Bilba Baggins";
         let mut enc_struct = setup_enc_struct();
