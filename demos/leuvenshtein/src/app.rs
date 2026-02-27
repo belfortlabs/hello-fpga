@@ -141,140 +141,6 @@ impl App {
     #[cfg(feature = "fpga")]
     const LUT_SIZE: usize = data::NAME_LIST.len();
 
-    pub fn process_enc_query_enc_db(&mut self, enc_struct: &mut EncStruct) {
-        // Get the min and max lenght of the db strings
-        let qlen = enc_struct.query.len() + 1;
-
-        // DB processing and encrypting
-        // let enc_struct.db_size: usize = data::NAME_LIST.len();
-        let mut db_len: HashMap<usize, usize> = HashMap::with_capacity(enc_struct.db_size);
-
-        for i in 0..enc_struct.db_size {
-            db_len.insert(i, data::NAME_LIST[i].len());
-        }
-
-        let db_max_size = *db_len.values().max().unwrap();
-
-        // Max factor is defined as the size of the D matrix! (db_max_size + 1)
-        let mut max_factor = std::cmp::max(db_max_size, qlen - 1);
-        max_factor += 1;
-
-        let th = ((max_factor as f64) / 2.0).ceil() as usize;
-
-        let query_padded = enc_struct.query.pad_to_width(max_factor - 1);
-
-        let scale_factor: u8 = 0; // You can put it to 64
-
-        let q_enc = query_padded
-            .bytes() // convert char to int
-            .map(|c| enc_struct.cks.encrypt((c - scale_factor) as u64))
-            .collect::<Vec<tfhe::shortint::Ciphertext>>();
-
-        let q2_enc = query_padded
-            .bytes() // convert char to int
-            .map(|c| enc_struct.cks.encrypt(((c - scale_factor) >> 4) as u64))
-            .collect::<Vec<tfhe::shortint::Ciphertext>>();
-
-        let zero_enc = enc_struct.cks.encrypt(0u64);
-        let one_enc = enc_struct.cks.encrypt(1u64);
-
-        let mut db_enc_matrix: Vec<Vec<Ciphertext>> = Vec::with_capacity(enc_struct.db_size);
-        let mut db1_enc_matrix: Vec<Vec<Ciphertext>> = Vec::with_capacity(enc_struct.db_size);
-
-        for i in 0..enc_struct.db_size {
-            let padded_name = data::NAME_LIST[i].pad_to_width(max_factor - 1);
-
-            let name_enc = padded_name
-                .bytes() // convert char to int
-                .map(|c| enc_struct.cks.encrypt((c - scale_factor) as u64)) // Encrypts
-                .collect::<Vec<tfhe::shortint::Ciphertext>>();
-
-            let name1_enc = padded_name
-                .bytes() // convert char to int
-                .map(|c| enc_struct.cks.encrypt(((c - scale_factor) >> 4) as u64))
-                .collect::<Vec<tfhe::shortint::Ciphertext>>();
-
-            db_enc_matrix.push(name_enc);
-            db1_enc_matrix.push(name1_enc);
-        }
-
-        let lut_min_vec_def = [0u64, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0].to_vec();
-        let lut_eq_vec_def = [9u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
-        let lut_1eq_vec_def = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
-
-        let lut_min = enc_struct
-            .sks
-            .generate_lookup_table_from_vector(&lut_min_vec_def);
-        let lut_1eq = enc_struct
-            .sks
-            .generate_lookup_table_from_vector(&lut_1eq_vec_def);
-        let lut_eq = enc_struct
-            .sks
-            .generate_lookup_table_from_vector(&lut_eq_vec_def);
-
-        let lut_1eq_vec = vec![lut_1eq; enc_struct.db_size];
-        let lut_eq_vec = vec![lut_eq; enc_struct.db_size];
-        let lut_min_vec = vec![lut_min; enc_struct.db_size];
-
-        let lut_1eq_fpga = LookupVector::new(lut_1eq_vec_def);
-        let lut_eq_fpga = LookupVector::new(lut_eq_vec_def);
-        let lut_min_fpga = LookupVector::new(lut_min_vec_def);
-
-        let lut_1eq_vec_fpga = vec![lut_1eq_fpga; enc_struct.db_size];
-        let lut_eq_vec_fpga = vec![lut_eq_fpga; enc_struct.db_size];
-        let lut_min_vec_fpga = vec![lut_min_fpga; enc_struct.db_size];
-
-        // Build and fill all the h_matrices
-        let mut h_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>> =
-            Vec::with_capacity(enc_struct.db_size);
-        let mut v_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>> =
-            Vec::with_capacity(enc_struct.db_size);
-
-        for _ in 0..enc_struct.db_size {
-            let mut h_matrix: Vec<Vec<tfhe::shortint::Ciphertext>> = Vec::with_capacity(max_factor);
-            let mut v_matrix: Vec<Vec<tfhe::shortint::Ciphertext>> = Vec::with_capacity(max_factor);
-
-            for _ in 0..max_factor {
-                let mut vec: Vec<tfhe::shortint::Ciphertext> = Vec::with_capacity(max_factor);
-                for _ in 0..max_factor {
-                    vec.push(zero_enc.clone());
-                }
-                h_matrix.push(vec.clone());
-                v_matrix.push(vec.clone());
-            }
-
-            for i in 0..max_factor {
-                v_matrix[i][0] = enc_struct.cks.encrypt(1u64);
-            }
-            for i in 0..max_factor {
-                h_matrix[0][i] = enc_struct.cks.encrypt(1u64);
-            }
-
-            h_matrices.push(h_matrix);
-            v_matrices.push(v_matrix);
-        }
-
-        let one_enc_vec = vec![one_enc.clone(); enc_struct.db_size];
-
-        enc_struct.max_factor = max_factor;
-        enc_struct.th = th;
-        enc_struct.q_enc = q_enc;
-        enc_struct.q2_enc = q2_enc;
-        enc_struct.db_enc_matrix = db_enc_matrix;
-        enc_struct.db1_enc_matrix = db1_enc_matrix;
-        enc_struct.one_enc_vec = one_enc_vec;
-        enc_struct.v_matrices = v_matrices;
-        enc_struct.h_matrices = h_matrices;
-        enc_struct.lut_1eq_vec_sw = lut_1eq_vec;
-        enc_struct.lut_eq_vec_sw = lut_eq_vec;
-        enc_struct.lut_min_vec_sw = lut_min_vec;
-        enc_struct.lut_1eq_vec_fpga = lut_1eq_vec_fpga;
-        enc_struct.lut_eq_vec_fpga = lut_eq_vec_fpga;
-        enc_struct.lut_min_vec_fpga = lut_min_vec_fpga;
-
-        enc_struct.time = Instant::now();
-    }
-
     pub fn process_plain_query_enc_db(&mut self, enc_struct: &mut EncStruct) {
         // Get the min and max lenght of the db strings
         let qlen = enc_struct.query.len() + 1;
@@ -580,18 +446,8 @@ impl App {
                 for j in 0..enc_struct.max_factor {
                     let h_dec: u64 = enc_struct.cks.decrypt(&enc_struct.h_matrices[k][i][j]);
                     let v_dec: u64 = enc_struct.cks.decrypt(&enc_struct.v_matrices[k][i][j]);
-
-                    if h_dec > 8 {
-                        h_vec.push((h_dec - 16) as i64);
-                    } else {
-                        h_vec.push(h_dec as i64);
-                    }
-
-                    if v_dec > 8 {
-                        v_vec.push((v_dec - 16) as i64);
-                    } else {
-                        v_vec.push(v_dec as i64);
-                    }
+                    h_vec.push(decode_matrix_value(h_dec));
+                    v_vec.push(decode_matrix_value(v_dec));
                 }
 
                 h_dec_matrix.push(h_vec);
@@ -603,20 +459,12 @@ impl App {
 
         let mut result_map: HashMap<usize, i64> = HashMap::new();
 
+        let m = enc_struct.max_factor - 1;
         for k in 0..enc_struct.db_size {
-            let mut diag_score = 0;
-
-            let m = enc_struct.max_factor - 1;
-
-            for i in 1..m + 1 {
-                diag_score += &h_dec_matrices[k][i][i];
-            }
-
-            for i in 0..m {
-                diag_score += &v_dec_matrices[k][i + 1][i];
-            }
-
-            result_map.insert(k, diag_score);
+            result_map.insert(
+                k,
+                compute_diagonal_score(&h_dec_matrices[k], &v_dec_matrices[k], m),
+            );
         }
 
         let sec = enc_struct.time.elapsed().as_secs_f64();
@@ -743,5 +591,84 @@ impl App {
             .centered()
             .wrap(Wrap { trim: true });
         frame.render_widget(paragraph, middle_block_area);
+    }
+}
+
+/// Maps a raw decrypted u64 to a signed i64, correcting for the 16-value bias used in the
+/// FHE encoding (values > 8 represent negative numbers stored as their 16-complement).
+fn decode_matrix_value(dec: u64) -> i64 {
+    if dec > 8 {
+        dec as i64 - 16
+    } else {
+        dec as i64
+    }
+}
+
+/// Sums the diagonal entries of the decrypted H and V matrices to produce the final
+/// Levenshtein similarity score for one database entry.
+fn compute_diagonal_score(h: &[Vec<i64>], v: &[Vec<i64>], m: usize) -> i64 {
+    let h_sum: i64 = (1..=m).map(|i| h[i][i]).sum();
+    let v_sum: i64 = (0..m).map(|i| v[i + 1][i]).sum();
+    h_sum + v_sum
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_low_values_unchanged() {
+        assert_eq!(decode_matrix_value(0), 0);
+        assert_eq!(decode_matrix_value(1), 1);
+        assert_eq!(decode_matrix_value(8), 8);
+    }
+
+    #[test]
+    fn decode_high_values_biased() {
+        assert_eq!(decode_matrix_value(9), -7);
+        assert_eq!(decode_matrix_value(15), -1);
+        assert_eq!(decode_matrix_value(16), 0);
+    }
+
+    #[test]
+    fn diagonal_score_all_zero_matrices() {
+        let m = 3;
+        let h = vec![vec![0i64; m + 1]; m + 1];
+        let v = vec![vec![0i64; m + 1]; m + 1];
+        assert_eq!(compute_diagonal_score(&h, &v, m), 0);
+    }
+
+    #[test]
+    fn diagonal_score_known_values() {
+        let m = 2;
+        let mut h = vec![vec![0i64; m + 1]; m + 1];
+        let mut v = vec![vec![0i64; m + 1]; m + 1];
+        // h diagonal: h[1][1]=1, h[2][2]=2  → sum 3
+        h[1][1] = 1;
+        h[2][2] = 2;
+        // v sub-diagonal: v[1][0]=3, v[2][1]=4  → sum 7
+        v[1][0] = 3;
+        v[2][1] = 4;
+        assert_eq!(compute_diagonal_score(&h, &v, m), 10);
+    }
+
+    #[test]
+    fn diagonal_score_only_h_contribution() {
+        let m = 2;
+        let mut h = vec![vec![0i64; m + 1]; m + 1];
+        let v = vec![vec![0i64; m + 1]; m + 1];
+        h[1][1] = 5;
+        h[2][2] = 3;
+        assert_eq!(compute_diagonal_score(&h, &v, m), 8);
+    }
+
+    #[test]
+    fn diagonal_score_only_v_contribution() {
+        let m = 2;
+        let h = vec![vec![0i64; m + 1]; m + 1];
+        let mut v = vec![vec![0i64; m + 1]; m + 1];
+        v[1][0] = 6;
+        v[2][1] = 2;
+        assert_eq!(compute_diagonal_score(&h, &v, m), 8);
     }
 }

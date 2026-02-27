@@ -33,10 +33,12 @@ use tfhe::shortint::prelude::*;
 
 use pad::PadStr;
 
+mod algorithm;
 mod app;
 mod data;
 mod enc_struct;
 mod util;
+use crate::algorithm::myers::*;
 use crate::app::App;
 use crate::app::InputMode;
 
@@ -80,9 +82,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
-    let area = terminal.size()?; // This gets width and height
+    let area = terminal.size()?;
 
-    // Define your minimum size
     let min_width = 100;
     let min_height = 35;
 
@@ -91,19 +92,16 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             "Terminal too small ({}x{}). Minimum size: {}x{}",
             area.width, area.height, min_width, min_height
         );
-
         return Err(io::Error::new(io::ErrorKind::Unsupported, msg));
     }
 
     terminal.draw(|frame| app.draw(frame))?;
 
     // security = 132 bits, p-fail = 2^-71.625
-    let mut v0_11_param_message_leuvenshtein =
-        tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS.clone();
-    v0_11_param_message_leuvenshtein.message_modulus = MessageModulus(16);
-    v0_11_param_message_leuvenshtein.carry_modulus = CarryModulus(1);
+    let mut params = tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS.clone();
+    params.message_modulus = MessageModulus(16);
+    params.carry_modulus = CarryModulus(1);
 
-    let params: ClassicPBSParameters = v0_11_param_message_leuvenshtein;
     let cks: ClientKey = ClientKey::new(params);
     let sks: ServerKey = ServerKey::new(&cks);
 
@@ -115,45 +113,29 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     let mut fpga_key = BelfortServerKey::from(&integer_server_key);
 
     let db_size = data::NAME_LIST.len();
+    let db_max_size = data::NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0);
+    let max_factor = std::cmp::max(db_max_size, 25) + 1;
 
-    let mut db_len: HashMap<usize, usize> = HashMap::with_capacity(db_size);
-
-    for i in 0..db_size {
-        db_len.insert(i, data::NAME_LIST[i].len());
-    }
-
-    let db_max_size = *db_len.values().into_iter().max().unwrap();
-
-    let mut max_factor = std::cmp::max(db_max_size, 25);
-    max_factor += 1;
+    let ascii_collection = (20..126u8).collect::<Vec<u8>>();
 
     let mut db_processed: HashMap<usize, HashMap<char, Vec<Ciphertext>>> = HashMap::new();
-
-    let ascii_collection = (20..126).collect::<Vec<u8>>();
 
     for k in 0..db_size {
         let t = data::NAME_LIST[k].pad_to_width(max_factor - 1);
         let m = t.len();
         let mut peq = HashMap::new();
-        let mut peq_plain = HashMap::new();
 
         for i in &ascii_collection {
             let s = *i as char;
-            let mut bitvec = vec![0u8; m];
-
-            for j in 0..m {
-                let pj = t.chars().nth(j).unwrap();
-                if s == pj {
-                    bitvec[j] = 9;
-                }
-            }
+            let bitvec: Vec<u8> = (0..m)
+                .map(|j| if t.chars().nth(j).unwrap() == s { 9 } else { 0 })
+                .collect();
 
             let vec_enc = bitvec
                 .iter()
-                .map(|c| cks.encrypt(*c as u64)) // Encrypts
+                .map(|c| cks.encrypt(*c as u64))
                 .collect::<Vec<tfhe::shortint::Ciphertext>>();
 
-            peq_plain.insert(s, bitvec);
             peq.insert(s, vec_enc);
         }
         db_processed.insert(k, peq);
@@ -194,56 +176,29 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     loop {
         terminal.draw(|f| ui(f, &app, &enc_struct))?;
 
-        if matches!(app.input_mode, InputMode::Process) {
+        let fpga = matches!(app.input_mode, InputMode::FProcess);
+        if fpga || matches!(app.input_mode, InputMode::Process) {
             if enc_struct.input.starts_with("p:") {
-                if app.progress_done.len() == 0 {
+                if app.progress_done.is_empty() {
                     app.process_plain_query_enc_db(&mut enc_struct);
                     app.progress_done.push(0);
-                    app.process_plain_part_i(1, &mut enc_struct, false);
+                    app.process_plain_part_i(1, &mut enc_struct, fpga);
                 } else if app.progress_done.len() >= enc_struct.max_factor {
-                    app.post_process(&mut enc_struct, false);
+                    app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {
-                    app.process_plain_part_i(app.progress_done.len(), &mut enc_struct, false);
+                    app.process_plain_part_i(app.progress_done.len(), &mut enc_struct, fpga);
                 }
             } else {
-                if app.progress_done.len() == 0 {
-                    app.process_enc_query_enc_db(&mut enc_struct);
+                if app.progress_done.is_empty() {
+                    process_enc_query_enc_db(&mut enc_struct);
                     app.progress_done.push(0);
-                    app.process_part_i(1, &mut enc_struct, false);
+                    app.process_part_i(1, &mut enc_struct, fpga);
                 } else if app.progress_done.len() >= enc_struct.max_factor {
-                    app.post_process(&mut enc_struct, false);
+                    app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {
-                    app.process_part_i(app.progress_done.len(), &mut enc_struct, false);
-                }
-            }
-        } else if matches!(app.input_mode, InputMode::FProcess) {
-            if app.input.starts_with("p:") {
-                if app.progress_done.len() == 0 {
-                    app.process_plain_query_enc_db(&mut enc_struct);
-
-                    app.progress_done.push(0);
-                    app.process_plain_part_i(1, &mut enc_struct, true);
-                } else if app.progress_done.len() >= enc_struct.max_factor {
-                    app.post_process(&mut enc_struct, true);
-
-                    app.input_mode = InputMode::Normal;
-                } else {
-                    app.process_plain_part_i(app.progress_done.len(), &mut enc_struct, true);
-                }
-            } else {
-                if app.progress_done.len() == 0 {
-                    app.process_enc_query_enc_db(&mut enc_struct);
-
-                    app.progress_done.push(0);
-                    app.process_part_i(1, &mut enc_struct, true);
-                } else if app.progress_done.len() >= enc_struct.max_factor {
-                    app.post_process(&mut enc_struct, true);
-
-                    app.input_mode = InputMode::Normal;
-                } else {
-                    app.process_part_i(app.progress_done.len(), &mut enc_struct, true);
+                    app.process_part_i(app.progress_done.len(), &mut enc_struct, fpga);
                 }
             }
         } else if let Event::Key(key) = event::read()? {
@@ -262,69 +217,39 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     }
                     _ => {}
                 },
-                InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                    KeyCode::Enter => {
-                        enc_struct.input = app.input.clone();
-
-                        if enc_struct.input.starts_with("p:") {
-                            enc_struct.query = enc_struct.input.chars().skip(2).collect();
-                        } else {
-                            enc_struct.query = enc_struct.input.clone();
+                InputMode::Editing | InputMode::FEditing if key.kind == KeyEventKind::Press => {
+                    match key.code {
+                        KeyCode::Enter => {
+                            enc_struct.input = app.input.clone();
+                            enc_struct.query = if enc_struct.input.starts_with("p:") {
+                                enc_struct.input.chars().skip(2).collect()
+                            } else {
+                                enc_struct.input.clone()
+                            };
+                            app.input_mode = match app.input_mode {
+                                InputMode::Editing => InputMode::Process,
+                                _ => InputMode::FProcess,
+                            };
                         }
-                        app.input_mode = InputMode::Process;
-                        // }
-                    }
-                    KeyCode::Char(to_insert) => {
-                        app.enter_char(to_insert);
-                    }
-                    KeyCode::Backspace => {
-                        app.delete_char();
-                    }
-                    KeyCode::Left => {
-                        app.move_cursor_left();
-                    }
-                    KeyCode::Right => {
-                        app.move_cursor_right();
-                    }
-                    KeyCode::Esc => {
-                        app.input_mode = InputMode::Normal;
-                    }
-                    _ => {}
-                },
-
-                InputMode::FEditing if key.kind == KeyEventKind::Press => match key.code {
-                    KeyCode::Enter => {
-                        enc_struct.input = app.input.clone();
-
-                        if enc_struct.input.starts_with("p:") {
-                            enc_struct.query = enc_struct.input.chars().skip(2).collect();
-                        } else {
-                            enc_struct.query = enc_struct.input.clone();
+                        KeyCode::Char(to_insert) => {
+                            app.enter_char(to_insert);
                         }
-                        app.input_mode = InputMode::FProcess;
-                        // }
+                        KeyCode::Backspace => {
+                            app.delete_char();
+                        }
+                        KeyCode::Left => {
+                            app.move_cursor_left();
+                        }
+                        KeyCode::Right => {
+                            app.move_cursor_right();
+                        }
+                        KeyCode::Esc => {
+                            app.input_mode = InputMode::Normal;
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char(to_insert) => {
-                        app.enter_char(to_insert);
-                    }
-                    KeyCode::Backspace => {
-                        app.delete_char();
-                    }
-                    KeyCode::Left => {
-                        app.move_cursor_left();
-                    }
-                    KeyCode::Right => {
-                        app.move_cursor_right();
-                    }
-                    KeyCode::Esc => {
-                        app.input_mode = InputMode::Normal;
-                    }
-                    _ => {}
-                },
-                InputMode::Editing => {}
-                InputMode::Process => {}
-                InputMode::FEditing => {}
-                InputMode::FProcess => {}
+                }
+                _ => {}
             }
         }
     }
@@ -383,61 +308,29 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
             Style::default().add_modifier(Modifier::SLOW_BLINK),
         ),
     };
-    let text = Text::from(Line::from(msg)).patch_style(style);
-    let help_message = Paragraph::new(text);
-    f.render_widget(help_message, help_area);
+    f.render_widget(
+        Paragraph::new(Text::from(Line::from(msg)).patch_style(style)),
+        help_area,
+    );
 
     let input = Paragraph::new(app.input.as_str())
         .style(match app.input_mode {
             InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-            InputMode::Process => Style::default().fg(Color::Blue),
-            InputMode::FEditing => Style::default().fg(Color::Yellow),
-            InputMode::FProcess => Style::default().fg(Color::Blue),
+            InputMode::Editing | InputMode::FEditing => Style::default().fg(Color::Yellow),
+            InputMode::Process | InputMode::FProcess => Style::default().fg(Color::Blue),
         })
         .block(Block::bordered().title(" Input "));
     f.render_widget(input, input_area);
-    match app.input_mode {
-        InputMode::Normal =>
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-            {}
 
-        InputMode::Editing => {
-            // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-            // rendering
-            #[allow(clippy::cast_possible_truncation)]
-            f.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                input_area.x + app.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                input_area.y + 1,
-            ));
-        }
-        InputMode::Process => {
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-        }
-        InputMode::FEditing => {
-            // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-            // rendering
-            #[allow(clippy::cast_possible_truncation)]
-            f.set_cursor_position(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                Position::new(
-                    input_area.x + app.character_index as u16 + 1,
-                    // Move one line down, from the border to the input line
-                    input_area.y + 1,
-                ),
-            );
-        }
-        InputMode::FProcess => {
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-        }
+    #[allow(clippy::cast_possible_truncation)]
+    if matches!(app.input_mode, InputMode::Editing | InputMode::FEditing) {
+        f.set_cursor_position(Position::new(
+            input_area.x + app.character_index as u16 + 1,
+            input_area.y + 1,
+        ));
     }
 
     let total_round: usize = enc_struct.max_factor;
-
     let done = app.progress_done.len();
     #[allow(clippy::cast_precision_loss)]
     let progress = Gauge::default()
@@ -462,19 +355,13 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
 
             let string_build = format!("{}) Query: \"", i);
             let string2_build = format!("\" in {} s ", m.2);
-
             let span2 = <String as Clone>::clone(&m.1).green().bold();
 
-            let span3: Vec<Span<'_>>;
-
-            if &m.3 == "Normal execution" {
-                span3 = vec![<String as Clone>::clone(&m.3).blue().bold()];
-            } else if &m.3 == "plaintext query" {
-                span3 = vec![<String as Clone>::clone(&m.3).magenta().bold()];
-            } else if &m.3 == "FPGA Acceleration" {
-                span3 = vec![<String as Clone>::clone(&m.3).yellow().bold()];
-            } else {
-                span3 = vec![
+            let span3: Vec<Span<'_>> = match m.3.as_str() {
+                "Normal execution" => vec![<String as Clone>::clone(&m.3).blue().bold()],
+                "plaintext query" => vec![<String as Clone>::clone(&m.3).magenta().bold()],
+                "FPGA Acceleration" => vec![<String as Clone>::clone(&m.3).yellow().bold()],
+                _ => vec![
                     Span::styled(
                         "plaintext query",
                         Style::default()
@@ -488,21 +375,19 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
                             .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
-                ];
-            }
+                ],
+            };
 
-            let mut line_part_1 = vec![
+            let mut line_parts = vec![
                 string_build.into(),
                 span1,
                 "\" matches with \"".into(),
                 span2,
                 string2_build.into(),
             ];
-            line_part_1.append(&mut span3.clone());
+            line_parts.extend(span3);
 
-            let line: Line<'_> = Line::from(line_part_1);
-
-            ListItem::new(line)
+            ListItem::new(Line::from(line_parts))
         })
         .collect();
     let messages = List::new(messages).block(Block::bordered().title(" Messages "));

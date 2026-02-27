@@ -23,6 +23,7 @@
 * SOFTWARE.
 */
 
+mod algorithm;
 mod app;
 mod data;
 mod enc_struct;
