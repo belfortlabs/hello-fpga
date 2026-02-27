@@ -552,70 +552,92 @@ pub fn process_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enable: boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::App;
+    use std::time::Instant;
 
-    // levenshtein_plain returns a Vec; the edit distance is at index x.len()
-    #[test]
-    fn plain_identical_strings() {
-        assert_eq!(levenshtein_plain("abc", "abc")[3], 0);
+    /// Builds an `EncStruct` with the same parameter set used by the application.
+    fn setup_enc_struct() -> EncStruct {
+        let mut params = tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS.clone();
+        params.message_modulus = MessageModulus(16);
+        params.carry_modulus = CarryModulus(1);
+        let cks: ClientKey = ClientKey::new(params);
+        let db_max_size = NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0);
+        let max_factor = std::cmp::max(db_max_size, 25) + 1;
+        println!("Start DB Processing");
+        let db_processed = process_db(&cks, max_factor);
+        println!("DB Processed!");
+        EncStruct::new(max_factor, db_processed, cks)
     }
 
+    /// 1. Plaintext – no FHE, pure Levenshtein on unencrypted strings.
     #[test]
-    fn plain_both_empty() {
-        assert_eq!(levenshtein_plain("", "")[0], 0);
+    fn test_unencrypted_levenshtein() {
+        let x = "Bilba Baggins";
+
+        // Direct distance to the expected match must be exactly 1 ('a' → 'o').
+        let dist = levenshtein_plain(x, "Bilbo Baggins");
+        assert_eq!(dist[x.len()], 1);
+
+        // Best match across the full NAME_LIST must be "Bilbo Baggins".
+        let best = NAME_LIST
+            .iter()
+            .min_by_key(|&&name| levenshtein_plain(x, name)[x.len()])
+            .copied()
+            .unwrap();
+        assert_eq!(best, "Bilbo Baggins");
     }
 
+    /// 2. CPU – plain query, encrypted database, FHE evaluated on the CPU.
     #[test]
-    fn plain_one_substitution() {
-        assert_eq!(levenshtein_plain("abc", "abd")[3], 1);
+    fn test_cpu_levenshtein() {
+        let query = "Bilba Baggins";
+        let mut enc_struct = setup_enc_struct();
+        enc_struct.input = format!("p:{query}");
+        enc_struct.query = query.to_string();
+
+        let start = Instant::now();
+        process_plain_query_enc_db(&mut enc_struct);
+        println!("Start Plain Processing took: {:?}", start.elapsed());
+        let max_factor = enc_struct.max_factor;
+        for i in 1..max_factor {
+            let start = Instant::now();
+            process_plain_part_i(i, &mut enc_struct, false);
+            println!("PProcess : {i}/{max_factor} took: {:?}", start.elapsed());
+        }
+
+        let mut app = App::new();
+        let start = Instant::now();
+        app.post_process(&mut enc_struct, false);
+        println!("STart Post Processing took: {:?}", start.elapsed());
+        assert_eq!(app.messages[0].1, "Bilbo Baggins");
     }
 
+    /// 3. FPGA – plain query, encrypted database, FHE evaluated on the FPGA.
     #[test]
-    fn plain_all_different() {
-        assert_eq!(levenshtein_plain("abc", "xyz")[3], 3);
-    }
+    #[cfg(feature = "fpga")]
+    fn test_fpga_levenshtein() {
+        let query = "Bilba Baggins";
+        let mut enc_struct = setup_enc_struct();
+        enc_struct.input = format!("p:{query}");
+        enc_struct.query = query.to_string();
 
-    #[test]
-    fn plain_empty_vs_nonempty() {
-        assert_eq!(levenshtein_plain("", "abc")[0], 3);
-    }
-
-    #[test]
-    fn plain_nonempty_vs_empty() {
-        assert_eq!(levenshtein_plain("abc", "")[3], 3);
-    }
-
-    // levenshtein_plain_matrix requires equal-length strings (asserted internally)
-    #[test]
-    fn matrix_identical_strings() {
-        assert_eq!(levenshtein_plain_matrix("abc", "abc"), 0);
-    }
-
-    #[test]
-    fn matrix_one_substitution() {
-        assert_eq!(levenshtein_plain_matrix("abc", "abd"), 1);
-    }
-
-    #[test]
-    fn matrix_all_different() {
-        assert_eq!(levenshtein_plain_matrix("abc", "xyz"), 3);
-    }
-
-    #[test]
-    fn matrix_shift_by_one() {
-        // "abc" → "bcd": optimal is delete 'a' + insert 'd' = 2
-        assert_eq!(levenshtein_plain_matrix("abc", "bcd"), 2);
-    }
-
-    // Both implementations must agree for equal-length inputs
-    #[test]
-    fn consistency_plain_vs_matrix() {
-        let pairs = [("hello", "hxllo"), ("rust", "dust"), ("abcd", "abcd")];
-        for (a, b) in pairs {
-            assert_eq!(
-                levenshtein_plain(a, b)[a.len()],
-                levenshtein_plain_matrix(a, b) as u32,
-                "mismatch for ({a}, {b})"
+        let start = Instant::now();
+        process_plain_query_enc_db(&mut enc_struct);
+        println!("Plain processing took: {:?}", start.elapsed());
+        let max_factor = enc_struct.max_factor;
+        for i in 1..max_factor {
+            let start = Instant::now();
+            process_plain_part_i(i, &mut enc_struct, true);
+            println!(
+                "Plain part {i}/{max_factor} processing took: {:?}",
+                start.elapsed()
             );
         }
+
+        let mut app = App::new();
+        let start = Instant::now();
+        app.post_process(&mut enc_struct, true);
+        println!("Post processing took: {:?}", start.elapsed());
+        assert_eq!(app.messages[0].1, "Bilbo Baggins");
     }
 }

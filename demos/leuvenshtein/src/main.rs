@@ -104,34 +104,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
     let cks: ClientKey = ClientKey::new(params);
 
-    let db_size = data::NAME_LIST.len();
     let db_max_size = data::NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0);
     let max_factor = std::cmp::max(db_max_size, 25) + 1;
 
-    let ascii_collection = (20..126u8).collect::<Vec<u8>>();
-
-    let mut db_processed: HashMap<usize, HashMap<char, Vec<Ciphertext>>> = HashMap::new();
-
-    for k in 0..db_size {
-        let t = data::NAME_LIST[k].pad_to_width(max_factor - 1);
-        let m = t.len();
-        let mut peq = HashMap::new();
-
-        for i in &ascii_collection {
-            let s = *i as char;
-            let bitvec: Vec<u8> = (0..m)
-                .map(|j| if t.chars().nth(j).unwrap() == s { 9 } else { 0 })
-                .collect();
-
-            let vec_enc = bitvec
-                .iter()
-                .map(|c| cks.encrypt(*c as u64))
-                .collect::<Vec<tfhe::shortint::Ciphertext>>();
-
-            peq.insert(s, vec_enc);
-        }
-        db_processed.insert(k, peq);
-    }
+    let db_processed = data::process_db(&cks, max_factor);
 
     let mut enc_struct = EncStruct::new(max_factor, db_processed, cks);
 
@@ -146,7 +122,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     app.progress_done.push(0);
                     process_plain_part_i(1, &mut enc_struct, fpga);
                     app.progress_done.push(1);
-                } else if app.progress_done.len() >= enc_struct.max_factor {
+                } else if app.progress_done.len() >= max_factor {
                     app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {
@@ -159,7 +135,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     app.progress_done.push(0);
                     process_part_i(1, &mut enc_struct, fpga);
                     app.progress_done.push(1);
-                } else if app.progress_done.len() >= enc_struct.max_factor {
+                } else if app.progress_done.len() >= max_factor {
                     app.post_process(&mut enc_struct, fpga);
                     app.input_mode = InputMode::Normal;
                 } else {

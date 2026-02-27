@@ -34,7 +34,6 @@ use crate::data::NAME_LIST;
 use tfhe::integer::fpga::BelfortServerKey;
 
 // Struct to maintain the state of the complete application
-#[cfg(feature = "fpga")]
 pub struct EncStruct {
     pub input: String,
     pub query: String,

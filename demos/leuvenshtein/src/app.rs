@@ -173,11 +173,11 @@ impl App {
         let time_string = format!("{:.5}", sec);
 
         let comment = if fpga_enable & enc_struct.input.starts_with("p:") {
-            "plaintext query and FPGA Acceleration".to_owned()
+            "Plaintext query and FPGA Acceleration".to_owned()
         } else if fpga_enable {
             "FPGA Acceleration".to_owned()
         } else if enc_struct.input.starts_with("p:") {
-            "plaintext query".to_owned()
+            "Plaintext query".to_owned()
         } else {
             "Normal execution".to_owned()
         };
