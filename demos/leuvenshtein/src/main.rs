@@ -26,12 +26,8 @@ use crate::enc_struct::EncStruct;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Gauge, List, ListItem, Paragraph};
 
-use std::collections::HashMap;
-use std::time::Instant;
 use std::{error::Error, io};
 use tfhe::shortint::prelude::*;
-
-use pad::PadStr;
 
 mod algorithm;
 mod app;
@@ -41,11 +37,6 @@ mod util;
 use crate::algorithm::myers::*;
 use crate::app::App;
 use crate::app::InputMode;
-
-#[cfg(feature = "fpga")]
-use tfhe::integer::fpga::BelfortServerKey;
-#[cfg(feature = "fpga")]
-use tfhe::integer::ServerKey as IntegerServerKey;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},

@@ -27,6 +27,7 @@ use tfhe::core_crypto::fpga::lookup_vector::LookupVector;
 #[cfg(feature = "fpga")]
 use tfhe::integer::ServerKey as IntegerServerKey;
 use tfhe::shortint::prelude::*;
+use tfhe::shortint::server_key::LookupTable;
 
 use crate::data::NAME_LIST;
 
@@ -41,30 +42,30 @@ pub struct EncStruct {
     pub db_size: usize,
     pub th: usize,
     pub time: Instant,
-    pub q_enc: Vec<tfhe::shortint::Ciphertext>,
-    pub q2_enc: Vec<tfhe::shortint::Ciphertext>,
-    pub db_enc_matrix: Vec<Vec<tfhe::shortint::Ciphertext>>,
-    pub db1_enc_matrix: Vec<Vec<tfhe::shortint::Ciphertext>>,
-    pub db_enc_map: HashMap<usize, HashMap<char, Vec<tfhe::shortint::Ciphertext>>>,
+    pub q_enc: Vec<Ciphertext>,
+    pub q2_enc: Vec<Ciphertext>,
+    pub db_enc_matrix: Vec<Vec<Ciphertext>>,
+    pub db1_enc_matrix: Vec<Vec<Ciphertext>>,
+    pub db_enc_map: HashMap<usize, HashMap<char, Vec<Ciphertext>>>,
     pub sks: ServerKey,
     pub cks: ClientKey,
     #[cfg(feature = "fpga")]
     pub fpga_key: BelfortServerKey,
-    pub one_enc_vec: Vec<tfhe::shortint::Ciphertext>,
-    pub v_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
-    pub h_matrices: Vec<Vec<Vec<tfhe::shortint::Ciphertext>>>,
-    pub lut_min_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_1eq_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_eq_vec_sw: Vec<tfhe::shortint::server_key::LookupTable<Vec<u64>>>,
-    pub lut_min_vec_fpga: Vec<LookupVector>,
-    pub lut_1eq_vec_fpga: Vec<LookupVector>,
-    pub lut_eq_vec_fpga: Vec<LookupVector>,
+    pub one_enc_vec: Vec<Ciphertext>,
+    pub v_matrices: Vec<Vec<Vec<Ciphertext>>>,
+    pub h_matrices: Vec<Vec<Vec<Ciphertext>>>,
+    pub lut_min_vec_sw: Vec<LookupTable<Vec<u64>>>,
+    pub lut_1eq_vec_sw: Vec<LookupTable<Vec<u64>>>,
+    pub lut_eq_vec_sw: Vec<LookupTable<Vec<u64>>>,
+    pub lut_min_fpga: LookupVector,
+    pub lut_1eq_fpga: LookupVector,
+    pub lut_eq_fpga: LookupVector,
 }
 
 impl EncStruct {
     pub fn new(
         max_factor: usize,
-        db_processed: HashMap<usize, HashMap<char, Vec<tfhe::shortint::Ciphertext>>>,
+        db_processed: HashMap<usize, HashMap<char, Vec<Ciphertext>>>,
         cks: ClientKey,
     ) -> Self {
         let sks: ServerKey = ServerKey::new(&cks);
@@ -79,11 +80,29 @@ impl EncStruct {
             fpga_key
         };
 
+        let db_size = NAME_LIST.len();
+
+        let lut_min_vec_def = [0u64, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0].to_vec();
+        let lut_eq_vec_def = [9u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
+        let lut_1eq_vec_def = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec();
+
+        let lut_min = sks.generate_lookup_table_from_vector(&lut_min_vec_def);
+        let lut_1eq = sks.generate_lookup_table_from_vector(&lut_1eq_vec_def);
+        let lut_eq = sks.generate_lookup_table_from_vector(&lut_eq_vec_def);
+
+        let lut_min_vec = vec![lut_min; db_size];
+        let lut_1eq_vec = vec![lut_1eq; db_size];
+        let lut_eq_vec = vec![lut_eq; db_size];
+
+        let lut_min_fpga = sks.generate_lookup_vector(&|x| lut_min_vec_def[x as usize]);
+        let lut_eq_fpga = sks.generate_lookup_vector(&|x| lut_eq_vec_def[x as usize]);
+        let lut_1eq_fpga = sks.generate_lookup_vector(&|x| lut_1eq_vec_def[x as usize]);
+
         Self {
             input: String::new(),
             query: String::new(),
             max_factor,
-            db_size: NAME_LIST.len(),
+            db_size,
             th: 0,
             time: Instant::now(),
             q_enc: Vec::new(),
@@ -98,12 +117,12 @@ impl EncStruct {
             one_enc_vec: Vec::new(),
             v_matrices: Vec::new(),
             h_matrices: Vec::new(),
-            lut_1eq_vec_sw: Vec::new(),
-            lut_eq_vec_sw: Vec::new(),
-            lut_min_vec_sw: Vec::new(),
-            lut_1eq_vec_fpga: Vec::new(),
-            lut_eq_vec_fpga: Vec::new(),
-            lut_min_vec_fpga: Vec::new(),
+            lut_1eq_vec_sw: lut_1eq_vec,
+            lut_eq_vec_sw: lut_eq_vec,
+            lut_min_vec_sw: lut_min_vec,
+            lut_1eq_fpga,
+            lut_eq_fpga,
+            lut_min_fpga,
         }
     }
 }
