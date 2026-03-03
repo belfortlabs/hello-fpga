@@ -54,9 +54,9 @@ pub struct EncStruct {
     pub one_enc_vec: Vec<Ciphertext>,
     pub v_matrices: Vec<Vec<Vec<Ciphertext>>>,
     pub h_matrices: Vec<Vec<Vec<Ciphertext>>>,
-    pub lut_min_vec_sw: Vec<LookupTable<Vec<u64>>>,
-    pub lut_1eq_vec_sw: Vec<LookupTable<Vec<u64>>>,
-    pub lut_eq_vec_sw: Vec<LookupTable<Vec<u64>>>,
+    pub lut_min: LookupTable<Vec<u64>>,
+    pub lut_1eq: LookupTable<Vec<u64>>,
+    pub lut_eq: LookupTable<Vec<u64>>,
     pub lut_min_fpga: LookupVector,
     pub lut_1eq_fpga: LookupVector,
     pub lut_eq_fpga: LookupVector,
@@ -90,10 +90,6 @@ impl EncStruct {
         let lut_1eq = sks.generate_lookup_table_from_vector(&lut_1eq_vec_def);
         let lut_eq = sks.generate_lookup_table_from_vector(&lut_eq_vec_def);
 
-        let lut_min_vec = vec![lut_min; db_size];
-        let lut_1eq_vec = vec![lut_1eq; db_size];
-        let lut_eq_vec = vec![lut_eq; db_size];
-
         let lut_min_fpga = sks.generate_lookup_vector(&|x| lut_min_vec_def[x as usize]);
         let lut_eq_fpga = sks.generate_lookup_vector(&|x| lut_eq_vec_def[x as usize]);
         let lut_1eq_fpga = sks.generate_lookup_vector(&|x| lut_1eq_vec_def[x as usize]);
@@ -117,9 +113,9 @@ impl EncStruct {
             one_enc_vec: Vec::new(),
             v_matrices: Vec::new(),
             h_matrices: Vec::new(),
-            lut_1eq_vec_sw: lut_1eq_vec,
-            lut_eq_vec_sw: lut_eq_vec,
-            lut_min_vec_sw: lut_min_vec,
+            lut_1eq,
+            lut_eq,
+            lut_min,
             lut_1eq_fpga,
             lut_eq_fpga,
             lut_min_fpga,

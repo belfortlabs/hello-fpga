@@ -226,7 +226,7 @@ pub fn process_plain_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enabl
                 ct_res = apply_lookup_table_packed(
                     &enc_struct.sks,
                     ct_res.iter().collect(),
-                    &enc_struct.lut_min_vec_sw,
+                    &enc_struct.lut_min,
                 );
             }
 
@@ -384,7 +384,7 @@ pub fn process_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enable: boo
                 let ct = apply_lookup_table_packed(
                     &enc_struct.sks,
                     eq1.iter().collect(),
-                    &enc_struct.lut_1eq_vec_sw,
+                    &enc_struct.lut_1eq,
                 );
                 eq1_lut.extend(ct);
             }
@@ -422,7 +422,7 @@ pub fn process_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enable: boo
                 let ct = apply_lookup_table_packed(
                     &enc_struct.sks,
                     eq2.iter().collect(),
-                    &enc_struct.lut_eq_vec_sw,
+                    &enc_struct.lut_eq,
                 );
                 eq2_lut.extend(ct);
             }
@@ -460,7 +460,7 @@ pub fn process_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enable: boo
                 let ct = apply_lookup_table_packed(
                     &enc_struct.sks,
                     key.iter().collect(),
-                    &enc_struct.lut_min_vec_sw,
+                    &enc_struct.lut_min,
                 );
                 ct_res.extend(ct);
             }
@@ -598,7 +598,8 @@ mod tests {
 
         let mut app = App::new();
         let start = Instant::now();
-        app.post_process(&mut enc_struct, false);
+        let result = decrypt_and_compute_results(&mut enc_struct);
+        app.post_process(result, &mut enc_struct, false);
         println!("STart Post Processing took: {:?}", start.elapsed());
         assert_eq!(app.messages[0].1, "Bilbo Baggins");
     }
@@ -627,7 +628,8 @@ mod tests {
 
         let mut app = App::new();
         let start = Instant::now();
-        app.post_process(&mut enc_struct, true);
+        let result = decrypt_and_compute_results(&mut enc_struct);
+        app.post_process(result, &mut enc_struct, true);
         println!("Post processing took: {:?}", start.elapsed());
         assert_eq!(app.messages[0].1, "Bilbo Baggins");
     }

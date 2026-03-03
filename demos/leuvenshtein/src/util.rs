@@ -88,16 +88,13 @@ pub fn write_number_elements(
 pub fn apply_lookup_table_packed(
     sk: &tfhe::shortint::ServerKey,
     cts: Vec<&Ciphertext>,
-    accs: &[LookupTableOwned],
+    lut: &LookupTableOwned,
 ) -> Vec<Ciphertext> {
     let mut ct_res: Vec<Ciphertext> = cts.iter().map(|&ct| ct.clone()).collect();
 
-    ct_res
-        .par_iter_mut()
-        .zip(accs.par_iter())
-        .for_each(|(ct, acc)| {
-            sk.apply_lookup_table_assign(ct, acc);
-        });
+    ct_res.par_iter_mut().for_each(|ct| {
+        sk.apply_lookup_table_assign(ct, lut);
+    });
 
     ct_res
 }
