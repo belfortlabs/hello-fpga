@@ -484,6 +484,62 @@ pub fn process_part_i(index: usize, enc_struct: &mut EncStruct, fpga_enable: boo
     }
 }
 
+pub fn decrypt_and_compute_results(enc_struct: &mut EncStruct) -> HashMap<usize, i64> {
+    let mut h_dec_matrices: Vec<Vec<Vec<i64>>> = Vec::with_capacity(enc_struct.db_size);
+    let mut v_dec_matrices: Vec<Vec<Vec<i64>>> = Vec::with_capacity(enc_struct.db_size);
+
+    for k in 0..enc_struct.db_size {
+        let mut h_dec_matrix: Vec<Vec<i64>> = Vec::with_capacity(enc_struct.max_factor);
+        let mut v_dec_matrix: Vec<Vec<i64>> = Vec::with_capacity(enc_struct.max_factor);
+
+        for i in 0..enc_struct.max_factor {
+            let mut h_vec: Vec<i64> = Vec::with_capacity(enc_struct.max_factor);
+            let mut v_vec: Vec<i64> = Vec::with_capacity(enc_struct.max_factor);
+
+            for j in 0..enc_struct.max_factor {
+                let h_dec: u64 = enc_struct.cks.decrypt(&enc_struct.h_matrices[k][i][j]);
+                let v_dec: u64 = enc_struct.cks.decrypt(&enc_struct.v_matrices[k][i][j]);
+                h_vec.push(decode_matrix_value(h_dec));
+                v_vec.push(decode_matrix_value(v_dec));
+            }
+
+            h_dec_matrix.push(h_vec);
+            v_dec_matrix.push(v_vec);
+        }
+        h_dec_matrices.push(h_dec_matrix);
+        v_dec_matrices.push(v_dec_matrix);
+    }
+
+    let mut result_map: HashMap<usize, i64> = HashMap::new();
+
+    let m = enc_struct.max_factor - 1;
+    for k in 0..enc_struct.db_size {
+        result_map.insert(
+            k,
+            compute_diagonal_score(&h_dec_matrices[k], &v_dec_matrices[k], m),
+        );
+    }
+    result_map
+}
+
+/// Maps a raw decrypted u64 to a signed i64, correcting for the 16-value bias used in the
+/// FHE encoding (values > 8 represent negative numbers stored as their 16-complement).
+fn decode_matrix_value(dec: u64) -> i64 {
+    if dec > 8 {
+        dec as i64 - 16
+    } else {
+        dec as i64
+    }
+}
+
+/// Sums the diagonal entries of the decrypted H and V matrices to produce the final
+/// Levenshtein similarity score for one database entry.
+fn compute_diagonal_score(h: &[Vec<i64>], v: &[Vec<i64>], m: usize) -> i64 {
+    let h_sum: i64 = (1..=m).map(|i| h[i][i]).sum();
+    let v_sum: i64 = (0..m).map(|i| v[i + 1][i]).sum();
+    h_sum + v_sum
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

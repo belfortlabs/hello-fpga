@@ -95,12 +95,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
     let cks: ClientKey = ClientKey::new(params);
 
-    let db_max_size = data::NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0);
-    let max_factor = std::cmp::max(db_max_size, 25) + 1;
+    let db_max_size = data::NAME_LIST.iter().map(|s| s.len()).max().unwrap_or(0) + 1;
 
-    let db_processed = data::process_db(&cks, max_factor);
+    let db_processed = data::process_db(&cks, db_max_size);
 
-    let mut enc_struct = EncStruct::new(max_factor, db_processed, cks);
+    let mut enc_struct = EncStruct::new(db_max_size, db_processed, cks);
 
     loop {
         terminal.draw(|f| ui(f, &app, &enc_struct))?;
@@ -108,30 +107,30 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         let fpga = matches!(app.input_mode, InputMode::FProcess);
         if fpga || matches!(app.input_mode, InputMode::Process) {
             if enc_struct.input.starts_with("p:") {
-                if app.progress_done.is_empty() {
+                if app.progress_done == 0 {
                     process_plain_query_enc_db(&mut enc_struct);
-                    app.progress_done.push(0);
+                    app.progress_done += 1;
                     process_plain_part_i(1, &mut enc_struct, fpga);
-                    app.progress_done.push(1);
-                } else if app.progress_done.len() >= max_factor {
-                    app.post_process(&mut enc_struct, fpga);
-                    app.input_mode = InputMode::Normal;
+                    app.progress_done += 1;
+                } else if app.progress_done >= enc_struct.max_factor {
+                    let result = decrypt_and_compute_results(&mut enc_struct);
+                    app.post_process(result, &mut enc_struct, fpga);
                 } else {
-                    process_plain_part_i(app.progress_done.len(), &mut enc_struct, fpga);
-                    app.progress_done.push(app.progress_done.len() as u8);
+                    process_plain_part_i(app.progress_done, &mut enc_struct, fpga);
+                    app.progress_done += 1;
                 }
             } else {
-                if app.progress_done.is_empty() {
+                if app.progress_done == 0 {
                     process_enc_query_enc_db(&mut enc_struct);
-                    app.progress_done.push(0);
+                    app.progress_done += 1;
                     process_part_i(1, &mut enc_struct, fpga);
-                    app.progress_done.push(1);
-                } else if app.progress_done.len() >= max_factor {
-                    app.post_process(&mut enc_struct, fpga);
-                    app.input_mode = InputMode::Normal;
+                    app.progress_done += 1;
+                } else if app.progress_done >= enc_struct.max_factor {
+                    let result = decrypt_and_compute_results(&mut enc_struct);
+                    app.post_process(result, &mut enc_struct, fpga);
                 } else {
-                    process_part_i(app.progress_done.len(), &mut enc_struct, fpga);
-                    app.progress_done.push(app.progress_done.len() as u8);
+                    process_part_i(app.progress_done, &mut enc_struct, fpga);
+                    app.progress_done += 1;
                 }
             }
         } else if let Event::Key(key) = event::read()? {
@@ -264,7 +263,7 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
     }
 
     let total_round: usize = enc_struct.max_factor;
-    let done = app.progress_done.len();
+    let done = app.progress_done;
     #[allow(clippy::cast_precision_loss)]
     let progress = Gauge::default()
         .gauge_style(Style::default().fg(Color::Green))

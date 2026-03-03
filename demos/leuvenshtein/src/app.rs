@@ -54,7 +54,7 @@ pub struct App {
     pub input_mode: InputMode,
     /// History of recorded messages
     pub messages: Vec<(String, String, String, String)>,
-    pub progress_done: Vec<u8>,
+    pub progress_done: usize,
 }
 
 impl App {
@@ -64,7 +64,7 @@ impl App {
             input_mode: InputMode::Normal,
             messages: Vec::new(),
             character_index: 0,
-            progress_done: Vec::new(),
+            progress_done: 0,
         }
     }
 
@@ -128,43 +128,12 @@ impl App {
         self.character_index = 0;
     }
 
-    pub fn post_process(&mut self, enc_struct: &mut EncStruct, fpga_enable: bool) {
-        // Computation of the rest of the matrix
-        let mut h_dec_matrices: Vec<Vec<Vec<i64>>> = Vec::with_capacity(enc_struct.db_size);
-        let mut v_dec_matrices: Vec<Vec<Vec<i64>>> = Vec::with_capacity(enc_struct.db_size);
-
-        for k in 0..enc_struct.db_size {
-            let mut h_dec_matrix: Vec<Vec<i64>> = Vec::with_capacity(enc_struct.max_factor);
-            let mut v_dec_matrix: Vec<Vec<i64>> = Vec::with_capacity(enc_struct.max_factor);
-
-            for i in 0..enc_struct.max_factor {
-                let mut h_vec: Vec<i64> = Vec::with_capacity(enc_struct.max_factor);
-                let mut v_vec: Vec<i64> = Vec::with_capacity(enc_struct.max_factor);
-
-                for j in 0..enc_struct.max_factor {
-                    let h_dec: u64 = enc_struct.cks.decrypt(&enc_struct.h_matrices[k][i][j]);
-                    let v_dec: u64 = enc_struct.cks.decrypt(&enc_struct.v_matrices[k][i][j]);
-                    h_vec.push(decode_matrix_value(h_dec));
-                    v_vec.push(decode_matrix_value(v_dec));
-                }
-
-                h_dec_matrix.push(h_vec);
-                v_dec_matrix.push(v_vec);
-            }
-            h_dec_matrices.push(h_dec_matrix);
-            v_dec_matrices.push(v_dec_matrix);
-        }
-
-        let mut result_map: HashMap<usize, i64> = HashMap::new();
-
-        let m = enc_struct.max_factor - 1;
-        for k in 0..enc_struct.db_size {
-            result_map.insert(
-                k,
-                compute_diagonal_score(&h_dec_matrices[k], &v_dec_matrices[k], m),
-            );
-        }
-
+    pub fn post_process(
+        &mut self,
+        result: HashMap<usize, i64>,
+        enc_struct: &mut EncStruct,
+        fpga_enable: bool,
+    ) {
         let sec = enc_struct.time.elapsed().as_secs_f64();
 
         let mut max_diff = 0;
@@ -183,7 +152,7 @@ impl App {
         };
 
         for i in 0..enc_struct.db_size {
-            let enc_score = result_map.get(&i).unwrap();
+            let enc_score = result.get(&i).unwrap();
 
             let diff = i64::abs_diff(
                 NAME_LIST[i].len().try_into().unwrap(),
@@ -211,9 +180,10 @@ impl App {
                 .push((enc_struct.query.clone(), matched_name, time_string, comment));
         }
 
-        self.progress_done.clear();
+        self.progress_done = 0;
         self.input.clear();
         self.reset_cursor();
+        self.input_mode = InputMode::Normal;
     }
 
     pub fn draw(&self, frame: &mut Frame) {
@@ -289,22 +259,4 @@ impl App {
             .wrap(Wrap { trim: true });
         frame.render_widget(paragraph, middle_block_area);
     }
-}
-
-/// Maps a raw decrypted u64 to a signed i64, correcting for the 16-value bias used in the
-/// FHE encoding (values > 8 represent negative numbers stored as their 16-complement).
-fn decode_matrix_value(dec: u64) -> i64 {
-    if dec > 8 {
-        dec as i64 - 16
-    } else {
-        dec as i64
-    }
-}
-
-/// Sums the diagonal entries of the decrypted H and V matrices to produce the final
-/// Levenshtein similarity score for one database entry.
-fn compute_diagonal_score(h: &[Vec<i64>], v: &[Vec<i64>], m: usize) -> i64 {
-    let h_sum: i64 = (1..=m).map(|i| h[i][i]).sum();
-    let v_sum: i64 = (0..m).map(|i| v[i + 1][i]).sum();
-    h_sum + v_sum
 }
