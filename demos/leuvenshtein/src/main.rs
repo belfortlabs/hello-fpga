@@ -35,8 +35,7 @@ mod data;
 mod enc_struct;
 mod util;
 use crate::algorithm::myers::*;
-use crate::app::App;
-use crate::app::InputMode;
+use crate::app::{App, ExecutionMode, InputMode, QueryResult, PLAINTEXT_PREFIX};
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -106,7 +105,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
         let fpga = matches!(app.input_mode, InputMode::FProcess);
         if fpga || matches!(app.input_mode, InputMode::Process) {
-            if enc_struct.input.starts_with("p:") {
+            if enc_struct.input.starts_with(PLAINTEXT_PREFIX) {
                 if app.progress_done == 0 {
                     process_plain_query_enc_db(&mut enc_struct);
                     app.progress_done += 1;
@@ -153,8 +152,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     match key.code {
                         KeyCode::Enter => {
                             enc_struct.input = app.input.clone();
-                            enc_struct.query = if enc_struct.input.starts_with("p:") {
-                                enc_struct.input.chars().skip(2).collect()
+                            enc_struct.query = if enc_struct.input.starts_with(PLAINTEXT_PREFIX) {
+                                enc_struct.input[PLAINTEXT_PREFIX.len()..].to_owned()
                             } else {
                                 enc_struct.input.clone()
                             };
@@ -275,25 +274,22 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
         .messages
         .iter()
         .enumerate()
-        .map(|(i, m)| {
-            let span1 = <String as Clone>::clone(&m.0).red().bold();
+        .map(|(i, m): (usize, &QueryResult)| {
+            let span1 = m.query.clone().red().bold();
 
-            if m.1 == "No" {
+            let Some(matched) = m.matched_name.as_ref() else {
                 return ListItem::new(Line::from(vec![
-                    Span::raw(format!("{}) No match found for ", i)),
+                    Span::raw(format!("{i}) No match found for ")),
                     span1,
                 ]));
-            }
+            };
 
-            let string_build = format!("{}) Query: \"", i);
-            let string2_build = format!("\" in {} s ", m.2);
-            let span2 = <String as Clone>::clone(&m.1).green().bold();
-
-            let span3: Vec<Span<'_>> = match m.3.as_str() {
-                "Normal execution" => vec![<String as Clone>::clone(&m.3).blue().bold()],
-                "plaintext query" => vec![<String as Clone>::clone(&m.3).magenta().bold()],
-                "FPGA Acceleration" => vec![<String as Clone>::clone(&m.3).yellow().bold()],
-                _ => vec![
+            let span2 = matched.clone().green().bold();
+            let span3: Vec<Span<'_>> = match m.mode {
+                ExecutionMode::Normal => vec!["Normal execution".blue().bold()],
+                ExecutionMode::Plaintext => vec!["plaintext query".magenta().bold()],
+                ExecutionMode::Fpga => vec!["FPGA Acceleration".yellow().bold()],
+                ExecutionMode::PlaintextAndFpga => vec![
                     Span::styled(
                         "plaintext query",
                         Style::default()
@@ -311,11 +307,11 @@ fn ui(f: &mut Frame, app: &App, enc_struct: &EncStruct) {
             };
 
             let mut line_parts = vec![
-                string_build.into(),
+                format!("{i}) Query: \"").into(),
                 span1,
                 "\" matches with \"".into(),
                 span2,
-                string2_build.into(),
+                format!("\" in {} s ", m.elapsed_secs).into(),
             ];
             line_parts.extend(span3);
 

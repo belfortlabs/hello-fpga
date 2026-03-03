@@ -34,6 +34,8 @@ use ratatui::{
     Frame,
 };
 
+pub const PLAINTEXT_PREFIX: &str = "p:";
+
 #[derive(Clone)]
 pub enum InputMode {
     Normal,
@@ -41,6 +43,22 @@ pub enum InputMode {
     Process,
     FEditing,
     FProcess,
+}
+
+#[derive(Clone, Copy)]
+pub enum ExecutionMode {
+    Normal,
+    Plaintext,
+    Fpga,
+    PlaintextAndFpga,
+}
+
+#[derive(Clone)]
+pub struct QueryResult {
+    pub query: String,
+    pub matched_name: Option<String>,
+    pub elapsed_secs: String,
+    pub mode: ExecutionMode,
 }
 
 /// App holds the state of the application
@@ -53,7 +71,7 @@ pub struct App {
     /// Current input mode
     pub input_mode: InputMode,
     /// History of recorded messages
-    pub messages: Vec<(String, String, String, String)>,
+    pub messages: Vec<QueryResult>,
     pub progress_done: usize,
 }
 
@@ -88,7 +106,7 @@ impl App {
     ///
     /// Since each character in a string can be contain multiple bytes, it's necessary to calculate
     /// the byte index based on the index of the character.
-    pub fn byte_index(&mut self) -> usize {
+    pub fn byte_index(&self) -> usize {
         self.input
             .char_indices()
             .map(|(i, _)| i)
@@ -97,26 +115,16 @@ impl App {
     }
 
     pub fn delete_char(&mut self) {
-        let current_index = self.character_index;
-        let is_cursor_leftmost = current_index == 0;
-        if is_cursor_leftmost {
+        if self.character_index == 0 {
             return;
         }
-
-        // Method "remove" is not used on the saved text for deleting the selected char.
-        // Reason: Using remove on String works on bytes instead of the chars.
-        // Using remove would require special care because of char boundaries.
-
-        let from_left_to_current_index = current_index - 1;
-
-        // Getting all characters before the selected character.
-        let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
-        // Getting all characters after selected character.
-        let after_char_to_delete = self.input.chars().skip(current_index);
-
-        // Put all characters together except the selected one.
-        // By leaving the selected one out, it is forgotten and therefore deleted.
-        self.input = before_char_to_delete.chain(after_char_to_delete).collect();
+        let byte_pos = self.byte_index();
+        let prev_start = self.input[..byte_pos]
+            .char_indices()
+            .next_back()
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        self.input.remove(prev_start);
         self.move_cursor_left();
     }
 
@@ -135,50 +143,39 @@ impl App {
         fpga_enable: bool,
     ) {
         let sec = enc_struct.time.elapsed().as_secs_f64();
-
-        let mut max_diff = 0;
-        let mut matched_name = "None".to_string();
-
         let time_string = format!("{:.5}", sec);
 
-        let comment = if fpga_enable & enc_struct.input.starts_with("p:") {
-            "Plaintext query and FPGA Acceleration".to_owned()
+        let mode = if fpga_enable && enc_struct.input.starts_with(PLAINTEXT_PREFIX) {
+            ExecutionMode::PlaintextAndFpga
         } else if fpga_enable {
-            "FPGA Acceleration".to_owned()
-        } else if enc_struct.input.starts_with("p:") {
-            "Plaintext query".to_owned()
+            ExecutionMode::Fpga
+        } else if enc_struct.input.starts_with(PLAINTEXT_PREFIX) {
+            ExecutionMode::Plaintext
         } else {
-            "Normal execution".to_owned()
+            ExecutionMode::Normal
         };
 
+        let query_len: i64 = enc_struct.query.len().try_into().unwrap();
+        let mut max_diff = 0i64;
+        let mut best_match: Option<String> = None;
+
         for i in 0..enc_struct.db_size {
-            let enc_score = result.get(&i).unwrap();
-
-            let diff = i64::abs_diff(
-                NAME_LIST[i].len().try_into().unwrap(),
-                enc_struct.query.len().try_into().unwrap(),
-            ) as i64;
-
-            if i64::abs_diff(*enc_score, NAME_LIST[i].len().try_into().unwrap()) as i64 - diff
-                > max_diff
-            {
-                matched_name = NAME_LIST[i].to_string();
-                max_diff =
-                    i64::abs_diff(*enc_score, NAME_LIST[i].len().try_into().unwrap()) as i64 - diff;
+            let enc_score = *result.get(&i).unwrap();
+            let name_len: i64 = NAME_LIST[i].len().try_into().unwrap();
+            let diff = i64::abs_diff(name_len, query_len) as i64;
+            let score_diff = i64::abs_diff(enc_score, name_len) as i64 - diff;
+            if score_diff > max_diff {
+                best_match = Some(NAME_LIST[i].to_string());
+                max_diff = score_diff;
             }
         }
 
-        if max_diff <= 5 {
-            self.messages.push((
-                enc_struct.query.clone(),
-                "No".to_owned(),
-                time_string,
-                "Normal execution".to_owned(),
-            ));
-        } else {
-            self.messages
-                .push((enc_struct.query.clone(), matched_name, time_string, comment));
-        }
+        self.messages.push(QueryResult {
+            query: enc_struct.query.clone(),
+            matched_name: if max_diff <= 5 { None } else { best_match },
+            elapsed_secs: time_string,
+            mode,
+        });
 
         self.progress_done = 0;
         self.input.clear();
@@ -247,11 +244,10 @@ impl App {
         let available_height = middle_block_area.height;
         let top_padding = (available_height.saturating_sub(text_lines) as f32 * 0.33) as u16;
 
-        let mut padded_lines = Vec::new();
-        for _ in 0..top_padding {
-            padded_lines.push(Line::from(""));
-        }
-        padded_lines.extend(text.lines.clone());
+        let padded_lines: Vec<Line<'_>> = std::iter::repeat(Line::default())
+            .take(top_padding as usize)
+            .chain(text.lines)
+            .collect();
 
         let paragraph = Paragraph::new(padded_lines)
             .block(block)
