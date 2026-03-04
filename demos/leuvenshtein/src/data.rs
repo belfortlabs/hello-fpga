@@ -31,7 +31,7 @@ pub const LUT_SIZE: usize = 48;
 
 pub const NAME_LIST: [&str; LUT_SIZE] = [
     "Wouter Legiest",
-    "Bilbo Baggins",
+    "Jan-Pieter D'Anvers",
     "Ingrid Verbauwhede",
     "Nam-Luc Tran",
     "Bojan Spasic",

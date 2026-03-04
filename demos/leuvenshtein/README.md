@@ -27,62 +27,29 @@ Start up the program by running the following command:
 cargo run --release --package leuvenshtein --bin demo --features fpga
 ```
 
-The app will start with a cleared screen, which will remain empty for a period of time. During this period, the database is being preprocessed. 
+The app will start with a cleared screen, which will remain empty for a period of time. During this period, the database is being preprocessed.
 
 After that, the main menu will appear. As instructed on the menu:
 
-- `e` is to start a queary to be executed on multi-core CPU 
+- `e` is to start a queary to be executed on multi-core CPU
 - `f` is to start a queary to be executed on FPGAs
 - `q` quits the program
 - `p:` is to start a plaintext query on un-encrypted database, resulting in an execution that is a third faster.
 
-### Database content
+## Citation
 
-- Wouter Legiest
-- Jan-Pieter D'Anvers
-- Ingrid Verbauwhede
-- Nam-Luc Tran
-- Bojan Spasic
-- Biff Tannen
-- Hans Gruber
-- Freddy Krueger
-- Hannibal Lecter
-- Indiana Jones
-- Vito Corleone
-- Marty McFly
-- Peter Venkman
-- Egon Spengler
-- Winston Zeddemore
-- Lorraine Baines
-- Ray Stantz
-- Ellen Ripley
-- John McClane
-- Tony Stark
-- Peter Parker
-- Steve Rogers
-- Thor Odinson
-- Natasha Romanoff
-- Clint Barton
-- Nick Fury
-- Phil Coulson
-- Rocky Balboa
-- Bilbo Baggins
-- Tony Montana
-- Samwise Gamgee
-- Ethan Hunt
-- James Bond
-- Bruce Wayne
-- Clark Kent
-- Diana Prince
-- Arthur Curry
-- Barry Allen
-- Hal Jordan
-- Logan Howlett
-- Charles Xavier
-- Jean Grey
-- Erik Lehnsherr
-- Stephen Strange
-- Bruce Banner
-- Peggy Carter
-- Norman Bates
-- Rick Deckard
+```
+@inproceedings{DBLP:conf/uss/LegiestDSTV25,
+  author       = {Wouter Legiest and
+                  Jan{-}Pieter D'Anvers and
+                  Bojan Spasic and
+                  Nam{-}Luc Tran and
+                  Ingrid Verbauwhede},
+  title        = {Leuvenshtein: Efficient FHE-based Edit Distance Computation with Single
+                  Bootstrap per Cell},
+  booktitle    = {{USENIX} Security Symposium},
+  pages        = {8423--8440},
+  publisher    = {{USENIX} Association},
+  year         = {2025}
+}
+```
