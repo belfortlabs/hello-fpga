@@ -31,9 +31,11 @@ set_server_key(fpga_key.clone());
 // The rest of your code stays unchanged
 ```
 
-:warning: This is the early access version of the Belfort FHE Accelerator.
+:warning: This is the early access version Belfort's Velox Accelerator. Contact us if you want access through [our website](https://belfortlabs.com/contact).
 
 ## How to run a demo?
+
+> In case you're looking for our AWS image, you can find the relevant instructions on [the f2 branch](https://github.com/belfortlabs/hello-fpga/tree/f2).
 
 ### Prepare execution environment
 
@@ -88,6 +90,14 @@ This repository also contains more comprehensive demo applications. Below you ca
 
 ```bash
 cargo run --release --package fhe-aes --bin demo --features fpga
+```
+
+#### Leuvenshtein
+
+[Leuvenshtein demo](/demos/leuvenshtein/README.md) implements the fuzzy matching algorithm to compare two strings while allowing a limited amount of mistakes. You can run the interactive demo with:
+
+```bash
+cargo run --release --package leuvenshtein --bin demo --features fpga
 ```
 
 #### Other Demos:
