@@ -44,23 +44,5 @@ else
     git -c user.name="Hello FPGA" -c user.email="hello-fpga@belfortlabs.com" commit -m "$PATCH_COMMIT_MSG"
 fi
 
-separator
-echo "Update rust if needed"
-
-export RUSTUP_HOME="$HOME/.rustup"
-export CARGO_HOME="$HOME/.cargo"
-
-export RUST_SETUP_SH="$REPO_DIR/scripts/rust_setup.sh"
-
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > $RUST_SETUP_SH
-
-chmod +x $RUST_SETUP_SH
-$RUST_SETUP_SH -y --no-modify-path
-rm -f $RUST_SETUP_SH
-
-source "$CARGO_HOME/env"
-
-pushd $TFHERS_DIR
-make install_rs_check_toolchain
-make install_rs_build_toolchain
-popd
+# Set default rust version
+rustup default stable
