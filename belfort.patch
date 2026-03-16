@@ -1,19 +1,15 @@
-diff --git a/.cargo/config.toml b/.cargo/config.toml
-index d4a1a16c1..bf504f99f 100644
---- a/.cargo/config.toml
-+++ b/.cargo/config.toml
-@@ -4,3 +4,10 @@ xtask = "run --manifest-path ./tasks/Cargo.toml --"
- # Accessed by wasm-bindgen when testing for the wasm target
- [target.wasm32-unknown-unknown]
- runner = 'wasm-bindgen-test-runner'
-+
-+[target.x86_64-unknown-linux-gnu]
-+linker = "clang"
-+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
-+
-+[build]
-+rustc-wrapper = "sccache"
-\ No newline at end of file
+diff --git a/tfhe-benchmark/Cargo.toml b/tfhe-benchmark/Cargo.toml
+index c1e81d412..40860a079 100644
+--- a/tfhe-benchmark/Cargo.toml
++++ b/tfhe-benchmark/Cargo.toml
+@@ -36,7 +36,6 @@ shortint = ["tfhe/shortint"]
+ integer = ["shortint", "tfhe/integer"]
+ gpu = ["tfhe/gpu"]
+ hpu = ["tfhe/hpu"]
+-hpu-v80 = ["tfhe/hpu-v80"]
+ internal-keycache = ["tfhe/internal-keycache"]
+ nightly-avx512 = ["tfhe/nightly-avx512"]
+ pbs-stats = ["tfhe/pbs-stats"]
 diff --git a/.github/actionlint.yaml b/.github/actionlint.yaml
 index 5b42cc2e7..68caac4c9 100644
 --- a/.github/actionlint.yaml
