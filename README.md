@@ -48,7 +48,7 @@ ssh -i <ssh_key> <username>@<server_dns_name>
 2. Clone this repo into your home directory
 
 ```bash
-git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
+git clone https://github.com/belfortlabs/hello-fpga.git
 ```
 
 3. Run the setup script
@@ -56,15 +56,6 @@ git clone --branch bologna https://github.com/belfortlabs/hello-fpga.git
 ```bash
 cd hello-fpga && ./scripts/prepare_env.sh
 ```
-
-4. Set the environment variables
-
-```bash
-source ~/.cargo/env
-source /opt/belfort/source_tools
-```
-
-Note: add the above lines to your `.bashrc` file to automatically source the environment variables when you log in.
 
 ### Run the weighted-sum tutorial
 
