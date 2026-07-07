@@ -5,7 +5,7 @@ export REPO_DIR="$(realpath "$(dirname "$(realpath "$0")")"/..)"
 ################################################################################
 # Cleanup TFHE-rs
 
-export TFHERS_DIR="$REPO_DIR/tfhe-rs"
+export TFHERS_DIR="$REPO_DIR/../tfhe-rs"
 
 cargo clean
 rm -rf $REPO_DIR/Cargo.lock
