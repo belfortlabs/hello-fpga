@@ -601,7 +601,10 @@ mod tests {
         let result = decrypt_and_compute_results(&mut enc_struct);
         app.post_process(result, &mut enc_struct, false);
         println!("STart Post Processing took: {:?}", start.elapsed());
-        assert_eq!(app.messages[0].1, "Bilbo Baggins");
+        assert_eq!(
+            app.messages[0].matched_name,
+            Some("Bilbo Baggins".to_string())
+        );
     }
 
     /// 3. FPGA – plain query, encrypted database, FHE evaluated on the FPGA.
@@ -631,6 +634,9 @@ mod tests {
         let result = decrypt_and_compute_results(&mut enc_struct);
         app.post_process(result, &mut enc_struct, true);
         println!("Post processing took: {:?}", start.elapsed());
-        assert_eq!(app.messages[0].1, "Bilbo Baggins");
+        assert_eq!(
+            app.messages[0].matched_name,
+            Some("Bilbo Baggins".to_string())
+        );
     }
 }
